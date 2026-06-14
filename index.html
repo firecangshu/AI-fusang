@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI-Fusang V3</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:#0d1117;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif}
+canvas{display:block}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="lang-switcher" style="position:fixed;top:10px;right:10px;z-index:10;display:flex;gap:6px;align-items:center;">
+  <button id="btn-zh" onclick="setLang('zh')" style="background:rgba(33,38,45,0.9);color:#e6edf3;border:1px solid #30363d;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🇨🇳 中文</button>
+  <button id="btn-en" onclick="setLang('en')" style="background:rgba(33,38,45,0.9);color:#e6edf3;border:1px solid #30363d;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🇺🇸 English</button>
+</div>
+<script>
+/* ===== postMessage Protocol (V4 draft) =====
+  Fusang (iframe) → Host (editor):
+    FUSANG_JUMP_TO_CODE     : {file, line, column}
+    FUSANG_REQUEST_AI_FIX  : {nodeId, error:{message,file,line}}
+    FUSANG_NODE_STATUS_CHANGED : {nodeId, oldStatus, newStatus}
+  Host → Fusang (iframe):
+    FUSANG_UPDATE_NODES     : {nodes, edges, errors}
+    FUSANG_AI_FIX_RESULT   : {nodeId, success, fixedCode}
+*/
+// ====== roundRect polyfill ======
+if(!CanvasRenderingContext2D.prototype.roundRect){
+  CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){
+    this.moveTo(x+r,y);
+    this.arcTo(x+w,y,x+w,y+h,r);
+    this.arcTo(x+w,y+h,x,y+h,r);
+    this.arcTo(x,y+h,x,y,r);
+    this.arcTo(x,y,x+w,y,r);
+    this.closePath();
+  };
+}
+
+// ====== 数据：5层通用模型 ======
+var tasks=[
+  {id:'def',   layer:0, status:'done',
+   label:{zh:'定义',en:'Definition'},
+   desc:{zh:'出发点：要解决什么问题',en:'Starting point: what problem to solve'},
+   myth:{zh:'山形底座',en:'Pedestal'}},
+  {id:'io',    layer:1, status:'done',
+   label:{zh:'输入输出',en:'I/O'},
+   desc:{zh:'分析需求：输入/输出/边界/约束',en:'Analyze requirements: input/output/boundary/constraints'},
+   myth:{zh:'树根',en:'Roots'}},
+  {id:'data',  layer:2, status:'blocked',
+   error:{message:{zh:'Redis连接失败: ECONNREFUSED',en:'Redis connection failed: ECONNREFUSED'}, file:'config/redis.js', line:15, callChain:['main()','initDB()','connectRedis()']},
+   label:{zh:'数据结构',en:'Data Structure'},
+   desc:{zh:'定义内部数据模型（阻塞演示）',en:'Define internal data model (blocked demo)'},
+   myth:{zh:'枝干',en:'Branch'}},
+  {id:'api',   layer:2, status:'waiting',
+   label:{zh:'外部接口',en:'External API'},
+   desc:{zh:'定义外部API端口（预留）',en:'Define external API endpoints (stub)'},
+   myth:{zh:'枝干 · 花苞',en:'Branch · Bud'}},
+  {id:'impl',  layer:3, status:'todo',
+   label:{zh:'实现',en:'Implementation'},
+   desc:{zh:'核心逻辑实现',en:'Core logic implementation'},
+   myth:{zh:'枝干',en:'Branch'}},
+  {id:'verify',layer:4, status:'todo',
+   label:{zh:'验证',en:'Verification'},
+   desc:{zh:'测试/检查',en:'Test/check'},
+   myth:{zh:'枝干',en:'Branch'}},
+  {id:'goal',  layer:5, status:'todo', isGoal:true,
+   label:{zh:'目标·交付',en:'Goal · Deliver'},
+   desc:{zh:'流程结束，交付产物',en:'Process ends, deliver product'},
+   myth:{zh:'树顶',en:'Crown'}}
+];
+var edges=[
+  {from:'def',to:'io'},
+  {from:'io',to:'data'},
+  {from:'io',to:'api'},
+  {from:'data',to:'impl'},
+  {from:'api',to:'impl'},
+  {from:'impl',to:'verify'},
+  {from:'verify',to:'goal'}
+];
+
+// ====== 常量 ======
+var SC={done:'#3fb950','in-progress':'#58a6ff',todo:'#6e7681',blocked:'#f85149',waiting:'#bc8cff'};
+// SL removed - unused, status labels now in i18n
+var NW=120,NH=40,PAD_X=120,PAD_TOP=60,LGAP=80,PED_H=70;
+
+// ====== Canvas 初始化 ======
+var cv=document.getElementById('c');
+var ctx=cv.getContext('2d');
+var W,H,layoutNodes=[],hoveredNode=null,selectedNode=null;
+var rootsExpanded=false,legendExpanded=false;
+var now=0;
+// Language detection & switcher
+function detectLang(){
+  var saved=localStorage.getItem('fusang-lang');
+  if(saved==='zh'||saved==='en') return saved;
+  var navLang=(navigator.language||navigator.userLanguage||'zh').toLowerCase();
+  return navLang.startsWith('zh')?'zh':'en';
+}
+function setLang(l){
+  lang=l;
+  localStorage.setItem('fusang-lang',l);
+  updateLangButtons();
+  document.title=i18n[l].title;
+}
+function updateLangButtons(){
+  var bZh=document.getElementById('btn-zh'), bEn=document.getElementById('btn-en');
+  if(bZh) bZh.style.borderColor=lang==='zh'?'#58a6ff':'#30363d';
+  if(bEn) bEn.style.borderColor=lang==='en'?'#58a6ff':'#30363d';
+}
+lang=detectLang();
+updateLangButtons();
+// document.title will be set after i18n definition below
+
+// ====== 动画状态 ======
+var budTransitions=[];  // {id, startTime, duration:800, done:false}
+var jinwuPulses=[];     // {id, startTime, x, y, duration:600}
+var dragonParticles=[];  // {t, speed} t∈[0,1] 沿龙身路径参数
+var blockedWarnings=[];   // {nodeId, startTime} 阻塞节点警告
+var edgeParticles=[];    // {edge, t, speed} 边级逆流粒子
+var fixAnimations=[];    // {nodeId, startTime, phase:'flash'|'glow'|'particles'}
+var demoMode=true,demoStep=0,demoStartTime=0;
+
+// ====== i18n 双语 ======
+var i18n={
+  zh:{
+    title:'AI-Fusang V3 · 扶桑逻辑通天树',
+    status:{done:'已完成','in-progress':'进行中',todo:'待办',blocked:'阻塞',waiting:'等待中'},
+    pedestal:'🏞️ 运行环境 Runtime',
+    roots:{expanded:'🔑 配置 ▲',collapsed:'🔑 配置 ▼'},
+    configWarning:'⚠ 配置异常',
+    blocked:'阻塞',
+    blockedLabel:'阻塞',
+    infoCard:{
+      layer:'层级',
+      myth:'神树意象',
+      error:'错误',
+      callChain:'调用链',
+      aiFix:'🤖 AI修复',
+      manualFix:'✋ 人工修复',
+      budHint:'🌐 点击激活花苞 → 金乌',
+      budLabel:'Stub'
+    },
+    legendTitle:'神树要件 × 程序概念',
+    legendItems:[
+      {icon:'🏞️',label:'底座',desc:'运行环境 Runtime'},
+      {icon:'🔑',label:'树根',desc:'配置文件/Env/Secrets'},
+      {icon:'┃',label:'主干',desc:'主流程 Main Pipeline'},
+      {icon:'↕',label:'枝干',desc:'分层架构 Layers'},
+      {icon:'☀️',label:'金乌',desc:'触发器/Event Hook'},
+      {icon:'🌐',label:'花苞',desc:'预留接口/Stub'},
+      {icon:'🐉',label:'盘龙',desc:'异常监控/Watchdog'},
+      {icon:'👑',label:'树顶',desc:'程序出口/Exit'}
+    ]
+  },
+  en:{
+    title:'AI-Fusang V3 · Logic Tree of Code',
+    status:{done:'Done','in-progress':'In Progress',todo:'Todo',blocked:'Blocked',waiting:'Waiting'},
+    pedestal:'🏞️ Runtime Environment',
+    roots:{expanded:'🔑 Config ▲',collapsed:'🔑 Config ▼'},
+    configWarning:'⚠ Config Error',
+    blocked:'Blocked',
+    blockedLabel:'Blocked',
+    infoCard:{
+      layer:'Layer',
+      myth:'Myth',
+      error:'Error',
+      callChain:'Call Chain',
+      aiFix:'🤖 AI Fix',
+      manualFix:'✋ Manual Fix',
+      budHint:'🌐 Click to activate bud → Jinwu',
+      budLabel:'Stub'
+    },
+    legendTitle:'Sacred Tree × Program Concept',
+    legendItems:[
+      {icon:'🏞️',label:'Pedestal',desc:'Runtime Environment'},
+      {icon:'🔑',label:'Roots',desc:'Config/Env/Secrets'},
+      {icon:'┃',label:'Trunk',desc:'Main Pipeline'},
+      {icon:'↕',label:'Branches',desc:'Layered Architecture'},
+      {icon:'☀️',label:'Jinwu',desc:'Trigger/Event Hook'},
+      {icon:'🌐',label:'Bud',desc:'Reserved Interface/Stub'},
+      {icon:'🐉',label:'Dragon',desc:'Watchdog/Monitor'},
+      {icon:'👑',label:'Crown',desc:'Program Exit'}
+    ]
+  }
+};
+
+// Now that i18n is defined, set document title
+document.title=i18n[lang].title;
+
+function resize(){
+  W=cv.width=window.innerWidth;
+  H=cv.height=window.innerHeight;
+  layout();
+}
+
+// ====== 布局：自底向上 ======
+function layout(){
+  var layers={};
+  tasks.forEach(function(t){
+    if(!layers[t.layer]) layers[t.layer]=[];
+    layers[t.layer].push(t);
+  });
+  var maxL=0;
+  tasks.forEach(function(t){if(t.layer>maxL)maxL=t.layer;});
+
+  var treeBottom=H-PED_H-PAD_TOP;
+
+  layoutNodes=tasks.map(function(t){
+    var peers=layers[t.layer];
+    var idx=peers.indexOf(t);
+    var count=peers.length;
+    var y=treeBottom-t.layer*LGAP-NH/2;
+    var x;
+    if(count===1) x=W/2;
+    else x=PAD_X+(W-PAD_X*2)/(count-1)*idx;
+    return Object.assign({},t,{x:x,y:y});
+  });
+}
+
+function nodeById(id){return layoutNodes.find(function(n){return n.id===id;});}
+function taskById(id){return tasks.find(function(t){return t.id===id;});}
+
+// ====== 缓动函数 ======
+function easeOut(t){return 1-Math.pow(1-t,3);}
+function easeInOut(t){return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;}
+
+// ====== 绘制主循环 ======
+function draw(timestamp){
+  now=timestamp||0;
+
+  // Demo 自动播放状态机
+  if(demoMode){
+    var elapsed=now-demoStartTime;
+    if(demoStep===0&&elapsed>16000){
+      demoStep=1;demoStartTime=now;
+      tasks.forEach(function(t){if(t.id==='data')t.status='blocked';else if(t.id!=='goal')t.status='done';});
+    } else if(demoStep===1&&elapsed>3000){
+      demoStep=2;
+      // data节点已blocked，只是等待2s让观众看到
+    } else if(demoStep===2&&elapsed>5000){
+      demoStep=3;
+      selectedNode=taskById('data');
+    } else if(demoStep===3&&elapsed>8000){
+      demoStep=4;
+      startFixAnimation('data','ai');
+    } else if(demoStep===4&&elapsed>11000){
+      demoStep=5;
+    } else if(demoStep===5&&elapsed>16000){
+      demoStep=0;demoStartTime=now;
+      rootsExpanded=false;selectedNode=null;
+    }
+  }
+
+  ctx.clearRect(0,0,W,H);
+
+  // 0. 底座
+  drawPedestal();
+
+  // 0.5 树根（展开时）
+  if(rootsExpanded) drawRoots();
+
+  // 1. 连线
+  drawEdges();
+  // 1.2 边级逆流粒子
+  drawEdgeParticles();
+
+  // 1.5 盘龙（在节点下方）
+  drawDragon();
+
+  // 2. 节点
+  drawNodes();
+
+  // 2.5 修复庆祝动画（粒子/辉光在节点上层）
+  drawFixAnimations();
+
+  // 3. 金乌 / 花苞 / 转场动画
+  drawJinwuAndBuds();
+
+  // 4. 脉冲动画
+  drawPulses();
+
+  // 5. 树顶皇冠
+  drawCrown();
+
+  // 6. 信息卡片
+  if(selectedNode) drawInfoCard(selectedNode);
+
+  // 7. 图例
+  drawLegend();
+
+  // 8. 标题
+  ctx.fillStyle='#8b949e';
+  ctx.font='11px sans-serif';
+  ctx.textAlign='left';
+  ctx.textBaseline='top';
+  ctx.fillText(i18n[lang].title, 12, 10);
+
+  // 清理过期动画
+  cleanupAnimations();
+
+  requestAnimationFrame(draw);
+}
+
+// ====== 连线绘制 ======
+function drawEdges(){
+  edges.forEach(function(e){
+    var from=nodeById(e.from),to=nodeById(e.to);
+    if(!from||!to) return;
+    var fy=from.y-NH/2, ty=to.y+NH/2;
+    var my=(fy+ty)/2;
+
+    // 连线颜色：from节点状态色（淡化），堵点边红色
+    var fromTask=taskById(e.from);
+    var toTask=taskById(e.to);
+    var edgeColor='#30363d';
+    if(fromTask&&(fromTask.status==='done'||fromTask.status==='in-progress')){
+      edgeColor=SC[fromTask.status]+'80';
+    }
+    if((fromTask&&fromTask.status==='blocked')||(toTask&&toTask.status==='blocked')){
+      edgeColor='#f85149';
+    }
+
+    ctx.strokeStyle=edgeColor;
+    ctx.lineWidth=((fromTask&&fromTask.status==='blocked')||(toTask&&toTask.status==='blocked'))?3:2;
+    ctx.beginPath();
+    ctx.moveTo(from.x,fy);
+    ctx.bezierCurveTo(from.x,my,to.x,my,to.x,ty);
+    ctx.stroke();
+
+    // 箭头
+    ctx.fillStyle=edgeColor;
+    ctx.beginPath();
+    ctx.moveTo(to.x,ty);
+    ctx.lineTo(to.x-5,ty-8);
+    ctx.lineTo(to.x+5,ty-8);
+    ctx.closePath();
+    ctx.fill();
+  });
+}
+
+// ====== 边级逆流粒子 ======
+function drawEdgeParticles(){
+  // 维护粒子数组：自动补充新粒子（只在堵点边上）
+  var blockedEdges=edges.filter(function(e){
+    var fromTask=taskById(e.from),toTask=taskById(e.to);
+    return (fromTask&&fromTask.status==='blocked')||(toTask&&toTask.status==='blocked');
+  });
+  edgeParticles=edgeParticles.filter(function(p){return p.t<1;});
+  blockedEdges.forEach(function(e){
+    if(!edgeParticles.some(function(p){return p.edge===e;})){
+      edgeParticles.push({edge:e,t:0,speed:0.005+Math.random()*0.005});
+    }
+  });
+  // 绘制 & 更新粒子
+  edgeParticles.forEach(function(p){
+    p.t+=p.speed;
+    if(p.t>=1) return;
+    var from=nodeById(p.edge.from),toN=nodeById(p.edge.to);
+    if(!from||!toN) return;
+    var fy=from.y-NH/2,ty=toN.y+NH/2,my=(fy+ty)/2;
+    var posT=1-p.t; // 逆流：t=0在to，t=1在from
+    var mt=1-posT;
+    var x=mt*mt*mt*from.x+3*mt*mt*posT*from.x+3*mt*posT*posT*toN.x+posT*posT*posT*toN.x;
+    var y=mt*mt*mt*fy+3*mt*mt*posT*my+3*mt*posT*posT*my+posT*posT*posT*ty;
+    var alpha=0.5+0.5*Math.sin(p.t*Math.PI);
+    ctx.fillStyle='rgba(248,81,73,'+alpha+')';
+    ctx.beginPath();
+    ctx.arc(x,y,2,0,Math.PI*2);
+    ctx.fill();
+  });
+}
+
+// ====== 节点绘制 ======
+function drawNodes(){
+  layoutNodes.forEach(function(n){
+    var x=n.x-NW/2,y=n.y-NH/2;
+    var isHover=hoveredNode&&hoveredNode.id===n.id;
+    var isSel=selectedNode&&selectedNode.id===n.id;
+    var realStatus=taskById(n.id)?taskById(n.id).status:n.status;
+
+    // Hover: 外发光效果
+    if(isHover&&!isSel){
+      ctx.save();
+      ctx.shadowColor=SC[realStatus];
+      ctx.shadowBlur=15;
+      ctx.fillStyle='rgba(255,255,255,0.04)';
+      ctx.beginPath();
+      ctx.roundRect(x-2,y-2,NW+4,NH+4,10);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 背景
+    ctx.fillStyle=isHover?SC[realStatus]+'55':SC[realStatus]+'38';
+    ctx.beginPath();
+    ctx.roundRect(x,y,NW,NH,8);
+    ctx.fill();
+
+    // 边框
+    ctx.strokeStyle=isHover||isSel?'#ffffff':SC[realStatus];
+    ctx.lineWidth=isHover||isSel?2.5:1.5;
+    if(isHover) { ctx.shadowColor='#fff'; ctx.shadowBlur=8; }
+    ctx.stroke();
+    ctx.shadowBlur=0; // reset shadow
+
+    // goal 节点金色边框
+    if(n.isGoal){
+      ctx.strokeStyle='#d4a72c';
+      ctx.lineWidth=2;
+      ctx.stroke();
+    }
+
+    // 文字
+    ctx.fillStyle='#e6edf3';
+    ctx.font=(isHover||isSel?'bold ':'')+'12px -apple-system,PingFang SC,sans-serif';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText(n.label[lang],n.x,n.y);
+
+    // 堵点效果：红色脉冲光环 + 边框闪烁
+    if(realStatus==='blocked'){
+      var pulsePhase=now/400;
+      var pulseAlpha=0.3+0.7*Math.abs(Math.sin(pulsePhase));
+      var pulseR=Math.max(NW,NH)/2+6+pulseAlpha*8;
+
+      // 外圈红色光晕
+      var grad=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,pulseR+10);
+      grad.addColorStop(0,'rgba(248,81,73,0)');
+      grad.addColorStop(0.5,'rgba(248,81,73,'+(pulseAlpha*0.15)+')');
+      grad.addColorStop(1,'rgba(248,81,73,0)');
+      ctx.fillStyle=grad;
+      ctx.beginPath();
+      ctx.arc(n.x,n.y,pulseR+10,0,Math.PI*2);
+      ctx.fill();
+
+      // 红色脉冲环
+      ctx.strokeStyle='rgba(248,81,73,'+pulseAlpha+')';
+      ctx.lineWidth=2+pulseAlpha*2;
+      ctx.beginPath();
+      ctx.arc(n.x,n.y,pulseR,0,Math.PI*2);
+      ctx.stroke();
+
+      // 堵点图标（感叹号）
+      ctx.fillStyle='rgba(248,81,73,'+pulseAlpha+')';
+      ctx.font='bold 14px sans-serif';
+      ctx.textAlign='center';
+      ctx.textBaseline='middle';
+      ctx.fillText('!',n.x,n.y-NH/2-12);
+    }
+  });
+}
+
+// ====== 金乌 & 花苞 ======
+function drawJinwuAndBuds(){
+  layoutNodes.forEach(function(n){
+    if(n.id==='goal') return;
+
+    var budY=n.y-NH/2-22;
+    // 从 tasks 取实时状态（layoutNodes 是 layout() 时的快照）
+    var realStatus=taskById(n.id)?taskById(n.id).status:n.status;
+
+    // 检查是否有转场动画进行中
+    var trans=budTransitions.find(function(t){return t.id===n.id;});
+
+    if(trans){
+      // 转场动画中
+      var elapsed=now-trans.startTime;
+      var progress=Math.min(1,elapsed/trans.duration);
+      drawTransition(n.x,budY,12,easeInOut(progress));
+      if(progress>=1&&!trans.done){
+        trans.done=true;
+        // 转场完成，更新状态
+        var task=taskById(n.id);
+        if(task) task.status='in-progress';
+        // 触发脉冲
+        jinwuPulses.push({id:n.id,startTime:now,x:n.x,y:budY,duration:600});
+        // 同步 layoutNodes 状态
+        n.status='in-progress';
+      }
+    } else if(realStatus==='waiting'){
+      // 花苞（预留接口）
+      drawBud(n.x,budY,12);
+    } else if(realStatus==='done'||realStatus==='in-progress'){
+      // 金乌
+      var active=realStatus==='done';
+      var breathe=active?1+0.08*Math.sin(now/800):1;
+      drawJinwu(n.x,budY,12*breathe,active);
+    }
+    // todo/blocked: 无金乌无花苞
+  });
+}
+
+// ====== 花苞绘制 ======
+function drawBud(x,y,size){
+  // 半透明花瓣，5瓣
+  var petalCount=5;
+  var petalSize=size*0.55;
+
+  // 外层光晕（淡紫）
+  var grad=ctx.createRadialGradient(x,y,0,x,y,size);
+  grad.addColorStop(0,'rgba(188,140,255,0.15)');
+  grad.addColorStop(1,'rgba(188,140,255,0)');
+  ctx.fillStyle=grad;
+  ctx.beginPath();
+  ctx.arc(x,y,size,0,Math.PI*2);
+  ctx.fill();
+
+  // 花瓣
+  for(var i=0;i<petalCount;i++){
+    var angle=Math.PI*2/petalCount*i-Math.PI/2;
+    var px=x+Math.cos(angle)*size*0.3;
+    var py=y+Math.sin(angle)*size*0.3;
+
+    ctx.fillStyle='rgba(188,140,255,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(px,py,petalSize,petalSize*0.5,angle,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  // 花苞核心（未开放的花心）
+  ctx.fillStyle='rgba(188,140,255,0.5)';
+  ctx.beginPath();
+  ctx.arc(x,y,size*0.25,0,Math.PI*2);
+  ctx.fill();
+
+  // "花苞" 标注
+  ctx.fillStyle='rgba(188,140,255,0.6)';
+  ctx.font='9px sans-serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText('Stub',x,y+size+8);
+}
+
+// ====== 花苞→金乌 转场动画 ======
+function drawTransition(x,y,size,progress){
+  // progress: 0=花苞, 1=金乌
+  var ep=easeInOut(progress);
+
+  // 花瓣消散
+  if(ep<0.5){
+    var petalAlpha=1-ep*2;
+    var petalCount=5;
+    var petalSize=size*0.55;
+    var spread=size*0.3+ep*size*0.8;
+
+    for(var i=0;i<petalCount;i++){
+      var angle=Math.PI*2/petalCount*i-Math.PI/2;
+      var px=x+Math.cos(angle)*spread;
+      var py=y+Math.sin(angle)*spread;
+
+      ctx.fillStyle='rgba(188,140,255,'+(petalAlpha*0.3)+')';
+      ctx.beginPath();
+      ctx.ellipse(px,py,petalSize*(1-ep),petalSize*0.5*(1-ep),angle,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // 金乌渐现
+  if(ep>0.3){
+    var jinwuAlpha=(ep-0.3)/0.7;
+    var jinwuSize=size*(0.5+jinwuAlpha*0.5);
+
+    // 光晕
+    var grad=ctx.createRadialGradient(x,y,0,x,y,jinwuSize);
+    grad.addColorStop(0,'rgba(240,208,96,'+(jinwuAlpha*0.6)+')');
+    grad.addColorStop(0.5,'rgba(212,167,44,'+(jinwuAlpha*0.2)+')');
+    grad.addColorStop(1,'rgba(212,167,44,0)');
+    ctx.fillStyle=grad;
+    ctx.beginPath();
+    ctx.arc(x,y,jinwuSize,0,Math.PI*2);
+    ctx.fill();
+
+    // 核心
+    ctx.fillStyle='rgba(240,208,96,'+jinwuAlpha+')';
+    ctx.beginPath();
+    ctx.arc(x,y,jinwuSize*0.35,0,Math.PI*2);
+    ctx.fill();
+
+    // 射线
+    if(jinwuAlpha>0.5){
+      var rayAlpha=(jinwuAlpha-0.5)*2;
+      for(var i=0;i<8;i++){
+        var a=Math.PI*2/8*i;
+        ctx.strokeStyle='rgba(240,208,96,'+rayAlpha+')';
+        ctx.lineWidth=1.5;
+        ctx.beginPath();
+        ctx.moveTo(x+Math.cos(a)*jinwuSize*0.45,y+Math.sin(a)*jinwuSize*0.45);
+        ctx.lineTo(x+Math.cos(a)*jinwuSize*0.75,y+Math.sin(a)*jinwuSize*0.75);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // 中间闪光
+  if(ep>0.4&&ep<0.7){
+    var flashAlpha=1-Math.abs(ep-0.55)/0.15;
+    flashAlpha=Math.max(0,Math.min(1,flashAlpha));
+    var flashGrad=ctx.createRadialGradient(x,y,0,x,y,size*1.5);
+    flashGrad.addColorStop(0,'rgba(255,255,255,'+(flashAlpha*0.4)+')');
+    flashGrad.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=flashGrad;
+    ctx.beginPath();
+    ctx.arc(x,y,size*1.5,0,Math.PI*2);
+    ctx.fill();
+  }
+}
+
+// ====== 金乌绘制 ======
+function drawJinwu(x,y,size,active){
+  var alpha=active?1:0.35;
+  // 光晕
+  var grad=ctx.createRadialGradient(x,y,0,x,y,size);
+  grad.addColorStop(0,'rgba(240,208,96,'+alpha*0.6+')');
+  grad.addColorStop(0.5,'rgba(212,167,44,'+alpha*0.2+')');
+  grad.addColorStop(1,'rgba(212,167,44,0)');
+  ctx.fillStyle=grad;
+  ctx.beginPath();
+  ctx.arc(x,y,size,0,Math.PI*2);
+  ctx.fill();
+  // 核心
+  ctx.fillStyle=active?'#f0d060':'rgba(212,167,44,0.5)';
+  ctx.beginPath();
+  ctx.arc(x,y,size*0.35,0,Math.PI*2);
+  ctx.fill();
+  // 8条射线
+  for(var i=0;i<8;i++){
+    var a=Math.PI*2/8*i;
+    ctx.strokeStyle=active?'#f0d060':'rgba(212,167,44,0.5)';
+    ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.moveTo(x+Math.cos(a)*size*0.45,y+Math.sin(a)*size*0.45);
+    ctx.lineTo(x+Math.cos(a)*size*0.75,y+Math.sin(a)*size*0.75);
+    ctx.stroke();
+  }
+}
+
+// ====== 脉冲动画 ======
+function drawPulses(){
+  jinwuPulses.forEach(function(p){
+    var elapsed=now-p.startTime;
+    var progress=elapsed/p.duration;
+    if(progress>1) return;
+
+    var ep=easeOut(progress);
+    var radius=12+ep*30;
+    var alpha=1-ep;
+
+    ctx.strokeStyle='rgba(240,208,96,'+(alpha*0.6)+')';
+    ctx.lineWidth=2*(1-ep);
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,radius,0,Math.PI*2);
+    ctx.stroke();
+
+    // 内圈
+    if(ep<0.5){
+      var innerAlpha=(1-ep*2)*0.3;
+      ctx.strokeStyle='rgba(255,255,255,'+innerAlpha+')';
+      ctx.lineWidth=1;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,radius*0.6,0,Math.PI*2);
+      ctx.stroke();
+    }
+  });
+}
+
+// ====== 清理过期动画 ======
+function cleanupAnimations(){
+  budTransitions=budTransitions.filter(function(t){
+    return now-t.startTime<t.duration+100;
+  });
+  jinwuPulses=jinwuPulses.filter(function(p){
+    return now-p.startTime<p.duration+100;
+  });
+}
+
+// ====== 修复庆祝动画 ======
+function startFixAnimation(nodeId,type){
+  var task=taskById(nodeId);
+  if(task) task.status='fixed';
+  fixAnimations.push({nodeId:nodeId,startTime:now,phase:'flash',type:type});
+}
+
+function drawFixAnimations(){
+  fixAnimations=fixAnimations.filter(function(f){
+    var elapsed=now-f.startTime;
+    if(elapsed>2100) return false;
+    if(f.phase==='flash'&&elapsed>=300){
+      f.phase='glow';
+      var task=taskById(f.nodeId);
+      if(task&&task.status==='fixed') task.status='done';
+    }
+    if(f.phase==='glow'&&elapsed>=1100){
+      f.phase='particles';
+    }
+    return true;
+  });
+  fixAnimations.forEach(function(f){
+    var elapsed=now-f.startTime;
+    var node=nodeById(f.nodeId);
+    if(!node) return;
+    if(f.phase==='flash'){
+      var ep=1-elapsed/300;
+      var grad=ctx.createRadialGradient(node.x,node.y,0,node.x,node.y,40+ep*30);
+      grad.addColorStop(0,'rgba(255,255,255,'+(ep*0.6)+')');
+      grad.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle=grad;
+      ctx.beginPath();
+      ctx.arc(node.x,node.y,40+ep*30,0,Math.PI*2);
+      ctx.fill();
+    } else if(f.phase==='glow'){
+      var gep=(elapsed-300)/800;
+      var radius=20+gep*80;
+      var alpha=1-gep*0.8;
+      ctx.strokeStyle='rgba(63,185,80,'+alpha+')';
+      ctx.lineWidth=2+gep*3;
+      ctx.beginPath();
+      ctx.arc(node.x,node.y,radius,0,Math.PI*2);
+      ctx.stroke();
+    } else if(f.phase==='particles'){
+      var pep=(elapsed-1100)/1000;
+      if(!f.particles) f.particles=[];
+      while(f.particles.length<8){
+        f.particles.push({x:node.x+(Math.random()-0.5)*60, y:node.y, vy:-1-Math.random()*2, life:0});
+      }
+      f.particles.forEach(function(p){
+        p.life++;
+        p.y+=p.vy;
+        p.vy*=0.99;
+        var pa=Math.max(0,1-p.life/60);
+        ctx.fillStyle='rgba(240,208,96,'+pa+')';
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,2,0,Math.PI*2);
+        ctx.fill();
+      });
+    }
+  });
+}
+
+// ====== 底座 ======
+function drawPedestal(){
+  var cx=W/2, baseY=H-PED_H;
+  var mW=Math.min(400,W*0.5);
+
+  // 后山
+  ctx.fillStyle='#161b22';
+  ctx.beginPath();
+  ctx.moveTo(cx-mW/2,baseY);
+  ctx.lineTo(cx-mW*0.1,baseY-50);
+  ctx.lineTo(cx+mW*0.2,baseY);
+  ctx.closePath();
+  ctx.fill();
+
+  // 中山
+  ctx.fillStyle='#1c2129';
+  ctx.beginPath();
+  ctx.moveTo(cx-mW*0.4,baseY);
+  ctx.lineTo(cx+mW*0.05,baseY-38);
+  ctx.lineTo(cx+mW*0.5,baseY);
+  ctx.closePath();
+  ctx.fill();
+
+  // 前山
+  ctx.fillStyle='#21262d';
+  ctx.beginPath();
+  ctx.moveTo(cx-mW*0.6,baseY);
+  ctx.lineTo(cx-mW*0.15,baseY-28);
+  ctx.lineTo(cx+mW*0.35,baseY);
+  ctx.closePath();
+  ctx.fill();
+
+  // 底座平台
+  ctx.fillStyle='#21262d';
+  ctx.fillRect(cx-mW*0.6,baseY,mW*1.2,20);
+
+  // 底座顶部边线
+  ctx.strokeStyle='#30363d';
+  ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.moveTo(cx-mW*0.6,baseY);
+  ctx.lineTo(cx+mW*0.6,baseY);
+  ctx.stroke();
+
+  // 标注
+  ctx.fillStyle='#484f58';
+  ctx.font='10px sans-serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText(i18n[lang].pedestal, cx, baseY+10);
+
+  // 配置提示
+  ctx.fillStyle=rootsExpanded?'#d4a72c':'#6e7681';
+    ctx.font=(rootsExpanded?'bold ':'')+'10px sans-serif';
+    ctx.fillText(rootsExpanded?i18n[lang].roots.expanded:i18n[lang].roots.collapsed,cx,baseY-10);
+
+    // 堵点底座红闪
+    if(tasks.some(function(t){return t.status==='blocked';})){
+      var pulsePhase=now/600;
+      var pulseAlpha=0.2+0.8*Math.abs(Math.sin(pulsePhase));
+      var grad=ctx.createRadialGradient(cx,baseY,0,cx,baseY,120);
+      grad.addColorStop(0,'rgba(248,81,73,'+(pulseAlpha*0.3)+')');
+      grad.addColorStop(0.5,'rgba(248,81,73,0)');
+      grad.addColorStop(1,'rgba(248,81,73,0)');
+      ctx.fillStyle=grad;
+      ctx.beginPath();
+      ctx.arc(cx,baseY,120,0,Math.PI*2);
+      ctx.fill();
+    }
+}
+
+// ====== 树根（配置区） ======
+function drawRoots(){
+  var cx=W/2, baseY=H-PED_H;
+  var hasBlocked=tasks.some(function(t){return t.status==='blocked';});
+  var warnH=hasBlocked?22:0;
+  var configs=[
+    {key:'ENV',val:'production',blocked:hasBlocked},
+    {key:'PORT',val:'3000'},
+    {key:'DB',val:'PostgreSQL'},
+    {key:'LOG',val:'stdout'}
+  ];
+  var rW=180,rH=configs.length*22+16+warnH;
+  var rx=cx-rW/2, ry=baseY+22;
+
+  ctx.fillStyle='rgba(13,17,23,0.92)';
+  ctx.beginPath();
+  ctx.roundRect(rx,ry,rW,rH,6);
+  ctx.fill();
+  ctx.strokeStyle='#30363d';
+  ctx.lineWidth=1;
+  ctx.stroke();
+
+  // 红色警告条
+  if(hasBlocked){
+    ctx.fillStyle='rgba(248,81,73,0.15)';
+    ctx.beginPath();
+    ctx.roundRect(rx+4,ry+4,rW-8,warnH-4,4);
+    ctx.fill();
+    ctx.fillStyle='#f85149';
+    ctx.font='bold 10px sans-serif';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText(i18n[lang].configWarning, cx, ry+warnH/2);
+  }
+
+  configs.forEach(function(c,i){
+    var cy=ry+12+warnH+i*22;
+    ctx.fillStyle=c.blocked?'#f85149':'#8b949e';
+    ctx.font='11px monospace';
+    ctx.textAlign='left';
+    ctx.textBaseline='middle';
+    ctx.fillText(c.key+':',rx+12,cy);
+    ctx.fillStyle=c.blocked?'#f85149':'#e6edf3';
+    ctx.fillText(c.val,rx+60,cy);
+  });
+}
+
+// ====== 树顶皇冠 ======
+function drawCrown(){
+  var goalNode=nodeById('goal');
+  if(!goalNode) return;
+  var cx=goalNode.x, cy=goalNode.y-NH/2-40;
+  var s=14;
+
+  ctx.fillStyle='#d4a72c';
+  ctx.beginPath();
+  ctx.moveTo(cx-s,cy+10);
+  ctx.lineTo(cx+s,cy+10);
+  ctx.lineTo(cx+s-3,cy+3);
+  ctx.lineTo(cx-s+3,cy+3);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(cx-s+3,cy+3);
+  ctx.lineTo(cx-s+5,cy-8);
+  ctx.lineTo(cx-s/2,cy);
+  ctx.lineTo(cx,cy-12);
+  ctx.lineTo(cx+s/2,cy);
+  ctx.lineTo(cx+s-5,cy-8);
+  ctx.lineTo(cx+s-3,cy+3);
+  ctx.closePath();
+  ctx.fill();
+
+  var grad=ctx.createRadialGradient(cx,cy,0,cx,cy,25);
+  grad.addColorStop(0,'rgba(212,167,44,0.15)');
+  grad.addColorStop(1,'rgba(212,167,44,0)');
+  ctx.fillStyle=grad;
+  ctx.beginPath();
+  ctx.arc(cx,cy,25,0,Math.PI*2);
+  ctx.fill();
+}
+
+// ====== 盘龙：异常监控 Watchdog ======
+// 龙身路径：基于节点位置计算蜿蜒曲线控制点
+var dragonPathPts=[];  // [{x,y}, ...] 龙身路径采样点（用于粒子运动）
+
+function calcDragonPath(){
+  // 龙身经过每个节点附近，左右交替偏移形成盘绕效果
+  var pts=[];
+  // 按层分组 layoutNodes（有 x,y）
+  var layers={};
+  layoutNodes.forEach(function(n){
+    if(!layers[n.layer]) layers[n.layer]=[];
+    layers[n.layer].push(n);
+  });
+  var treeBottom=H-PED_H-PAD_TOP;
+
+  // 从底座开始
+  pts.push({x:W/2+30, y:treeBottom+10});
+
+  // 逐层向上，左右交替偏移
+  var maxL=0;
+  layoutNodes.forEach(function(n){if(n.layer>maxL)maxL=n.layer;});
+  for(var L=0;L<=maxL;L++){
+    var layerNodes=layers[L];
+    if(!layerNodes) continue;
+    // 本层节点平均x
+    var avgX=0;
+    layerNodes.forEach(function(n){avgX+=n.x;});
+    avgX/=layerNodes.length;
+    var y=treeBottom-L*LGAP-NH/2;
+    // 左右交替偏移
+    var offset=((L%2===0)?1:-1)*(40+Math.min(L*5,20));
+    pts.push({x:avgX+offset, y:y+NH/2+10});
+    // 层间过渡点
+    if(L<maxL){
+      var nextY=treeBottom-(L+1)*LGAP-NH/2;
+      var midY=(y+nextY)/2;
+      pts.push({x:avgX+offset*0.6, y:midY});
+    }
+  }
+
+  // 终点：树顶上方
+  var gn=nodeById('goal');
+  if(gn) pts.push({x:gn.x-20, y:gn.y-NH/2-30});
+
+  // 采样：在控制点之间插值，生成密集路径点（供粒子使用）
+  dragonPathPts=[];
+  for(var i=0;i<pts.length-1;i++){
+    var p0=pts[i], p1=pts[i+1];
+    var steps=Math.max(4,Math.round(Math.hypot(p1.x-p0.x,p1.y-p0.y)/8));
+    for(var s=0;s<=steps;s++){
+      var t=s/steps;
+      // 加一点正弦波动让龙身更自然
+      var wave=Math.sin(t*Math.PI*2)*3;
+      var perpX=-(p1.y-p0.y)/Math.hypot(p1.x-p0.x,p1.y-p0.y);
+      var perpY=(p1.x-p0.x)/Math.hypot(p1.x-p0.x,p1.y-p0.y);
+      dragonPathPts.push({
+        x:p0.x+(p1.x-p0.x)*t+perpX*wave,
+        y:p0.y+(p1.y-p0.y)*t+perpY*wave
+      });
+    }
+  }
+  return pts; // 返回控制点供绘制使用
+}
+
+function drawDragonBody(ctrlPts){
+  if(ctrlPts.length<2) return;
+  // 龙身：青铜色粗线
+  ctx.strokeStyle='#4a5a3a';
+  ctx.lineWidth=5;
+  ctx.lineCap='round';
+  ctx.lineJoin='round';
+  ctx.beginPath();
+  ctx.moveTo(ctrlPts[0].x,ctrlPts[0].y);
+  for(var i=1;i<ctrlPts.length;i++){
+    ctx.lineTo(ctrlPts[i].x,ctrlPts[i].y);
+  }
+  ctx.stroke();
+
+  // 龙身亮边
+  ctx.strokeStyle='#5a6a4a';
+  ctx.lineWidth=2;
+  ctx.stroke();
+
+  // 鳞片：沿路径等距采样画小菱形
+  if(dragonPathPts.length<2) return;
+  var step=14;
+  for(var i=0;i<dragonPathPts.length;i+=step){
+    var pt=dragonPathPts[i];
+    var angle=0;
+    if(i>0&&i<dragonPathPts.length-1){
+      var dx=dragonPathPts[i+1].x-dragonPathPts[i-1].x;
+      var dy=dragonPathPts[i+1].y-dragonPathPts[i-1].y;
+      angle=Math.atan2(dy,dx);
+    }
+    var ss=3;
+    ctx.fillStyle='#3a4a2a';
+    ctx.beginPath();
+    ctx.moveTo(pt.x+Math.cos(angle)*ss, pt.y+Math.sin(angle)*ss);
+    ctx.lineTo(pt.x+Math.cos(angle+Math.PI/2)*ss, pt.y+Math.sin(angle+Math.PI/2)*ss);
+    ctx.lineTo(pt.x+Math.cos(angle+Math.PI)*ss, pt.y+Math.sin(angle+Math.PI)*ss);
+    ctx.lineTo(pt.x+Math.cos(angle+3*Math.PI/2)*ss, pt.y+Math.sin(angle+3*Math.PI/2)*ss);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+function drawDragonEye(){
+  // 龙眼位置：树顶附近
+  var goalN=nodeById('goal');
+  if(!goalN) return;
+  var ex=goalN.x-20, ey=goalN.y-NH/2-50;
+  var eyeR=4;
+
+  // 检查是否有阻塞节点 → 龙眼红色快闪
+  var hasBlocked=tasks.some(function(t){return t.status==='blocked';});
+  var eyeColor=hasBlocked?'#ff4444':'#d4a72c';
+  var pulse=hasBlocked?(0.5+0.5*Math.sin(now/150)):(0.7+0.3*Math.sin(now/600));
+
+  // 左眼
+  var grad=ctx.createRadialGradient(ex-5,ey,0,ex-5,ey,eyeR*2);
+  grad.addColorStop(0,'rgba(255,255,200,'+pulse+')');
+  grad.addColorStop(0.5,eyeColor);
+  grad.addColorStop(1,'rgba(74,90,58,0)');
+  ctx.fillStyle=grad;
+  ctx.beginPath();
+  ctx.arc(ex-5,ey,eyeR*2,0,Math.PI*2);
+  ctx.fill();
+
+  // 右眼
+  grad=ctx.createRadialGradient(ex+5,ey,0,ex+5,ey,eyeR*2);
+  grad.addColorStop(0,'rgba(255,255,200,'+pulse+')');
+  grad.addColorStop(0.5,eyeColor);
+  grad.addColorStop(1,'rgba(74,90,58,0)');
+  ctx.fillStyle=grad;
+  ctx.beginPath();
+  ctx.arc(ex+5,ey,eyeR*2,0,Math.PI*2);
+  ctx.fill();
+
+  // 瞳孔
+  ctx.fillStyle=hasBlocked?'#ff0000':'#8b6914';
+  ctx.beginPath();
+  ctx.arc(ex-5,ey,eyeR*0.5,0,Math.PI*2);
+  ctx.arc(ex+5,ey,eyeR*0.5,0,Math.PI*2);
+  ctx.fill();
+}
+
+function drawDragonParticles(){
+  // 沿龙身路径流动的监控光点
+  // dragonParticles: [{t, speed}] t∈[0,1] 路径参数
+  var N=dragonPathPts.length;
+  if(N<2) return;
+
+  // 维护粒子数组：自动补充新粒子
+  dragonParticles=dragonParticles.filter(function(p){return p.t<1;});
+  while(dragonParticles.length<3){
+    dragonParticles.push({t:0,speed:0.002+Math.random()*0.003});
+  }
+
+  dragonParticles.forEach(function(p){
+    p.t+=p.speed;
+    if(p.t>1) return;
+    var idx=Math.floor(p.t*(N-1));
+    var frac=p.t*(N-1)-idx;
+    if(idx>=N-1){idx=N-2;frac=1;}
+    var pt={
+      x:dragonPathPts[idx].x+(dragonPathPts[idx+1].x-dragonPathPts[idx].x)*frac,
+      y:dragonPathPts[idx].y+(dragonPathPts[idx+1].y-dragonPathPts[idx].y)*frac
+    };
+    // 检查附近是否有阻塞节点 → 粒子变红
+    var nearBlocked=false;
+    tasks.forEach(function(t){
+      if(t.status!=='blocked') return;
+      var tn=nodeById(t.id);
+      if(tn&&Math.hypot(pt.x-tn.x,pt.y-tn.y)<80) nearBlocked=true;
+    });
+
+    var alpha=0.4+0.6*Math.sin(p.t*Math.PI);
+    ctx.fillStyle=nearBlocked?'rgba(255,68,68,'+alpha+')':'rgba(160,200,100,'+alpha+')';
+    ctx.beginPath();
+    ctx.arc(pt.x,pt.y,2,0,Math.PI*2);
+    ctx.fill();
+  });
+}
+
+function drawBlockedWarnings(){
+  // 阻塞节点：龙身对应位置红色警告脉冲
+  tasks.forEach(function(t){
+    if(t.status!=='blocked') return;
+    var tn=nodeById(t.id);
+    if(!tn) return;
+    // 找龙身最接近该节点的点
+    var minDist=Infinity, bestIdx=-1;
+    dragonPathPts.forEach(function(pt,i){
+      var d=Math.hypot(pt.x-tn.x,pt.y-tn.y);
+      if(d<minDist){minDist=d;bestIdx=i;}
+    });
+    if(bestIdx<0) return;
+
+    // 警告脉冲动画
+    var warnStart=blockedWarnings.find(function(w){return w.nodeId===t.id;});
+    if(!warnStart){
+      blockedWarnings.push({nodeId:t.id,startTime:now});
+      warnStart=blockedWarnings[blockedWarnings.length-1];
+    }
+    var elapsed=now-warnStart.startTime;
+    var pulseAlpha=0.3+0.7*Math.abs(Math.sin(elapsed/300));
+
+    // 红色光环
+    ctx.strokeStyle='rgba(248,81,73,'+pulseAlpha+')';
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.arc(dragonPathPts[bestIdx].x,dragonPathPts[bestIdx].y,12+pulseAlpha*6,0,Math.PI*2);
+    ctx.stroke();
+
+    // 红色填充
+    ctx.fillStyle='rgba(248,81,73,'+(pulseAlpha*0.15)+')';
+    ctx.beginPath();
+    ctx.arc(dragonPathPts[bestIdx].x,dragonPathPts[bestIdx].y,12+pulseAlpha*6,0,Math.PI*2);
+    ctx.fill();
+
+    // 警告文字
+    ctx.fillStyle='rgba(248,81,73,'+pulseAlpha+')';
+    ctx.font='9px sans-serif';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText(i18n[lang].blockedLabel,dragonPathPts[bestIdx].x,dragonPathPts[bestIdx].y+20);
+  });
+  // 清理已不存在的阻塞警告
+  blockedWarnings=blockedWarnings.filter(function(w){
+    return tasks.some(function(t){return t.id===w.nodeId&&t.status==='blocked';});
+  });
+}
+
+function drawDragon(){
+  var ctrlPts=calcDragonPath();
+  drawDragonBody(ctrlPts);
+  drawDragonEye();
+  drawDragonParticles();
+  drawBlockedWarnings();
+}
+
+// ====== 信息卡片 ======
+function drawInfoCard(n){
+  var cx=W-285,cy=20,cw=270,ch=hasError?200:150;
+  var realStatus=taskById(n.id)?taskById(n.id).status:n.status;var hasError=realStatus==='blocked'&&!!n.error;
+  var maxTextW=cw-28; // usable text width after padding
+
+  ctx.fillStyle='rgba(22,27,34,0.95)';
+  ctx.beginPath();
+  ctx.roundRect(cx,cy,cw,ch,10);
+  ctx.fill();
+  ctx.strokeStyle='#30363d';
+  ctx.lineWidth=1;
+  ctx.stroke();
+
+  // 标题（可能较长，截断）
+  ctx.fillStyle='#e6edf3';
+  ctx.font='bold 14px -apple-system,PingFang SC,sans-serif';
+  ctx.textAlign='left';
+  ctx.textBaseline='top';
+  var title=n.label[lang];
+  if(ctx.measureText(title).width>maxTextW){
+    while(ctx.measureText(title+'...').width>maxTextW&&title.length>0) title=title.slice(0,-1);
+    title=title+'...';
+  }
+  ctx.fillText(title,cx+14,cy+12);
+
+  // 状态
+  ctx.fillStyle=SC[realStatus];
+  ctx.font='12px sans-serif';
+  ctx.fillText(i18n[lang].status[realStatus],cx+14,cy+34);
+
+  // 层级
+  ctx.fillStyle='#8b949e';
+  ctx.fillText(i18n[lang].infoCard.layer+': '+n.layer, cx+14, cy+54);
+
+  // 神树意象
+  ctx.fillStyle='#d4a72c';
+  ctx.font='11px sans-serif';
+  ctx.fillText(i18n[lang].infoCard.myth+': '+n.myth[lang], cx+14, cy+74);
+
+  // 描述（自动换行或截断）
+  ctx.fillStyle='#c9d1d9';
+  ctx.font='11px -apple-system,PingFang SC,sans-serif';
+  var desc=n.desc[lang];
+  if(ctx.measureText(desc).width>maxTextW){
+    while(ctx.measureText(desc+'...').width>maxTextW&&desc.length>0) desc=desc.slice(0,-1);
+    desc=desc+'...';
+  }
+  ctx.fillText(desc,cx+14,cy+96);
+
+  // 堵点 + error 详情
+  if(hasError){
+    // 错误信息（截断）
+    ctx.fillStyle='#f85149';
+    ctx.font='bold 11px sans-serif';
+    ctx.textAlign='left';
+    ctx.textBaseline='top';
+    var errMsg=n.error.message[lang];
+    if(ctx.measureText(i18n[lang].infoCard.error+': '+errMsg).width>maxTextW){
+      // try to fit just the message part
+      var prefix=i18n[lang].infoCard.error+': ';
+      var avail=maxTextW-ctx.measureText(prefix).width;
+      if(avail<40){ avail=maxTextW; prefix=''; }
+      if(ctx.measureText(errMsg).width>avail){
+        while(ctx.measureText(errMsg+'...').width>avail&&errMsg.length>0) errMsg=errMsg.slice(0,-1);
+        errMsg=errMsg+'...';
+      }
+      ctx.fillText(prefix+errMsg,cx+14,cy+116);
+    }else{
+      ctx.fillText(i18n[lang].infoCard.error+': '+n.error.message[lang],cx+14,cy+116);
+    }
+
+    // 调用链（更小的字号，截断）
+    if(n.error.callChain){
+      ctx.fillStyle='#8b949e';
+      ctx.font='9px monospace';
+      var ccStr=n.error.callChain.join(' \u2192 ');
+      if(ctx.measureText(ccStr).width>maxTextW){
+        while(ctx.measureText(ccStr+'...').width>maxTextW&&ccStr.length>0) ccStr=ccStr.slice(0,-1);
+        ccStr=ccStr+'...';
+      }
+      ctx.fillText(i18n[lang].infoCard.callChain+': '+ccStr,cx+14,cy+134);
+    }
+    var btnW=90,btnH=22,btnY=cy+158;
+    ctx.fillStyle='#58a6ff';
+    ctx.beginPath();
+    ctx.roundRect(cx+14,btnY,btnW,btnH,4);
+    ctx.fill();
+    ctx.fillStyle='#fff';
+    ctx.font='bold 11px sans-serif';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText(i18n[lang].infoCard.aiFix, cx+14+btnW/2, btnY+btnH/2);
+    ctx.fillStyle='#6e7681';
+    ctx.beginPath();
+    ctx.roundRect(cx+14+btnW+6,btnY,btnW,btnH,4);
+    ctx.fill();
+    ctx.fillStyle='#e6edf3';
+    ctx.font='bold 11px sans-serif';
+    ctx.fillText(i18n[lang].infoCard.manualFix, cx+14+btnW+6+btnW/2, btnY+btnH/2);
+  }
+
+  // 花苞节点提示
+  if(realStatus==='waiting'&&!hasError){
+    ctx.fillStyle='#bc8cff';
+    ctx.font='10px sans-serif';
+    ctx.textAlign='left';
+    ctx.textBaseline='top';
+    ctx.fillText(i18n[lang].infoCard.budHint, cx+14, cy+120);
+  }
+}
+
+// ====== 图例面板 ======
+function drawLegend(){
+  var lx=10, ly=H-40, lw=24, lh=24;
+  ctx.fillStyle='rgba(22,27,34,0.9)';
+  ctx.beginPath();
+  ctx.roundRect(lx,ly,lw,lh,4);
+  ctx.fill();
+  ctx.lineWidth=1;
+  ctx.stroke();
+  ctx.fillStyle='#8b949e';
+  ctx.font='12px sans-serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText(legendExpanded?'\u2716':'\u2630',lx+lw/2,ly+lh/2);
+
+  if(!legendExpanded) return;
+
+  // 展开面板 - wider to fit 3 columns: icon | label | desc
+  var panelW=290, panelH=i18n[lang].legendItems.length*28+18;
+  var px=lx, py=ly-panelH;
+
+  ctx.fillStyle='rgba(22,27,34,0.95)';
+  ctx.beginPath();
+  ctx.roundRect(px,py,panelW,panelH,8);
+  ctx.fill();
+  ctx.strokeStyle='#30363d';
+  ctx.lineWidth=1;
+  ctx.stroke();
+
+  // 标题
+  ctx.fillStyle='#e6edf3';
+  ctx.font='bold 11px -apple-system,PingFang SC,sans-serif';
+  ctx.textAlign='left';
+  ctx.textBaseline='top';
+  ctx.fillText(i18n[lang].legendTitle, px+12, py+7);
+
+  i18n[lang].legendItems.forEach(function(item,i){
+    var iy=py+28+i*28;
+    // icon (2-char emoji ≈ 16px)
+    ctx.font='13px sans-serif';
+    ctx.textAlign='left';
+    ctx.textBaseline='middle';
+    ctx.fillText(item.icon,px+14,iy+8);
+    // label (fixed width column)
+    ctx.fillStyle='#d4a72c';
+    ctx.font='bold 11px -apple-system,PingFang SC,sans-serif';
+    ctx.fillText(item.label,px+38,iy+8);
+    // desc (after label column)
+    ctx.fillStyle='#8b949e';
+    ctx.font='10px sans-serif';
+    ctx.fillText(item.desc,px+100,iy+8);
+  });
+}
+
+// ====== 交互：点击检测 ======
+function hitTest(mx,my){
+  for(var i=layoutNodes.length-1;i>=0;i--){
+    var n=layoutNodes[i];
+    if(mx>=n.x-NW/2&&mx<=n.x+NW/2&&my>=n.y-NH/2&&my<=n.y+NH/2) return n;
+  }
+  return null;
+}
+
+function hitPedestal(mx,my){
+  var baseY=H-PED_H;
+  var cx=W/2, mW=Math.min(400,W*0.5);
+  return mx>=cx-mW*0.6&&mx<=cx+mW*0.6&&my>=baseY-15&&my<=baseY+20;
+}
+
+function hitLegendToggle(mx,my){
+  var lx=10, ly=H-40, lw=24, lh=24;
+  return mx>=lx&&mx<=lx+lw&&my>=ly&&my<=ly+lh;
+}
+
+// 花苞点击检测（比节点范围稍大，包含花苞区域）
+function hitBud(mx,my){
+  for(var i=layoutNodes.length-1;i>=0;i--){
+    var n=layoutNodes[i];
+    var realStatus=taskById(n.id)?taskById(n.id).status:n.status;
+    if(realStatus==='waiting'&&!budTransitions.find(function(t){return t.id===n.id;})){
+      var budY=n.y-NH/2-22;
+      var dx=mx-n.x, dy=my-budY;
+      if(dx*dx+dy*dy<=20*20) return n;
+    }
+  }
+  return null;
+}
+
+cv.addEventListener('mousemove',function(e){
+  var r=cv.getBoundingClientRect();
+  var mx=e.clientX-r.left, my=e.clientY-r.top;
+  hoveredNode=hitTest(mx,my);
+  var bud=hitBud(mx,my);
+  cv.style.cursor=hoveredNode||hitPedestal(mx,my)||hitLegendToggle(mx,my)||bud?'pointer':'default';
+});
+
+cv.addEventListener('click',function(e){
+  var r=cv.getBoundingClientRect();
+  var mx=e.clientX-r.left, my=e.clientY-r.top;
+
+  // 图例切换
+  if(hitLegendToggle(mx,my)){
+    legendExpanded=!legendExpanded;
+    return;
+  }
+
+  // 底座 → 切换树根
+  if(hitPedestal(mx,my)){
+    rootsExpanded=!rootsExpanded;
+    return;
+  }
+
+  // 花苞 → 激活转场
+  var bud=hitBud(mx,my);
+  if(bud){
+    budTransitions.push({id:bud.id,startTime:now,duration:800});
+    selectedNode=bud;
+    return;
+  }
+
+  // 信息卡片按钮检测（AI修复 / 人工修复）
+  if(selectedNode&&selectedNode.status==='blocked'&&selectedNode.error){
+    var bcy=20+158,bcx=W-285;
+    if(mx>=bcx+14&&mx<=bcx+104&&my>=bcy&&my<=bcy+22){
+      startFixAnimation(selectedNode.id,'ai');return;
+    }
+    if(mx>=bcx+110&&mx<=bcx+200&&my>=bcy&&my<=bcy+22){
+      startFixAnimation(selectedNode.id,'manual');return;
+    }
+  }
+
+  selectedNode=hitTest(mx,my);
+});
+
+window.addEventListener('resize',resize);
+
+window.addEventListener('message',function(e){
+  // V4: handle FUSANG_UPDATE_NODES, FUSANG_AI_FIX_RESULT
+  console.log('[Fusang] postMessage received:', e.data);
+});
+
+resize();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

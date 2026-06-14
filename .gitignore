@@ -1,0 +1,17 @@
+# WorkBuddy memory (project-local, not for GitHub)
+.workbuddy/
+
+# Node modules (if any tooling added later)
+node_modules/
+
+# Temp files
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
