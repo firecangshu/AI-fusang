@@ -81,45 +81,39 @@ Fusang is designed as an **embeddable panel** — drop it in an iframe and drive
 ```javascript
 const fusang = document.getElementById('fusang-frame');
 
-// Update a task's status
+// Replace all nodes (Host → Fusang)
 fusang.contentWindow.postMessage({
-  type: 'fusang:update',
-  taskId: 'design',
-  status: 'done'
+  type: 'FUSANG_UPDATE_NODES',
+  tasks: [/* array of task objects */]
 }, '*');
 
-// Highlight a node
+// Notify AI fix result (Host → Fusang)
 fusang.contentWindow.postMessage({
-  type: 'fusang:highlight',
-  taskId: 'data'
-}, '*');
-
-// Reset the tree
-fusang.contentWindow.postMessage({ type: 'fusang:reset' }, '*');
-
-// Grow a new node
-fusang.contentWindow.postMessage({
-  type: 'fusang:grow',
-  taskId: 'deploy'
+  type: 'FUSANG_AI_FIX_RESULT',
+  nodeId: 'data',
+  success: true,
+  fixedCode: 'port: 6379 // fixed'
 }, '*');
 ```
 
 ### Listen for Fusang events
 ```javascript
 window.addEventListener('message', (e) => {
-  switch(e.data.type) {
-    case 'fusang:jump':
+  const d = e.data;
+  if(!d || !d.type) return;
+  switch(d.type) {
+    case 'FUSANG_JUMP_TO_CODE':
       // User clicked a blocked node → jump to code
-      editor.setCursorPosition(e.data.codeLine);
-      editor.openFile(e.data.file);
+      editor.openFile(d.file);
+      editor.setCursorPosition(d.line);
       break;
-    case 'fusang:select':
-      // User selected a node
-      console.log('Selected:', e.data.taskId);
+    case 'FUSANG_REQUEST_AI_FIX':
+      // User clicked "AI Fix" → host should run AI fix
+      runAIFix(d.nodeId, d.error);
       break;
-    case 'fusang:complete':
-      // All tasks done! 🎆
-      celebrate();
+    case 'FUSANG_NODE_STATUS_CHANGED':
+      // A node's status changed
+      console.log('Node', d.nodeId, 'changed:', d.oldStatus, '→', d.newStatus);
       break;
   }
 });
@@ -170,4 +164,4 @@ Star this repo — it helps others discover it.
 
 ---
 
-Built with [Cytoscape.js](https://js.cytoscape.org/) · Inspired by the missing piece in every AI assistant · Named after 扶桑，中国通天神树
+Built with pure Canvas 2D · Inspired by the missing piece in every AI assistant · Named after 扶桑，中国通天神树

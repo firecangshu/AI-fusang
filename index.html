@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>AI-Fusang V3</title>
+<title>AI-Fusang</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden;background:#0d1117;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif}
@@ -40,14 +40,26 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
 
 // ====== 数据：5层通用模型 ======
 var tasks=[];  // loaded from tasks.json
+var loadingState='loading'; // 'loading' | 'ready' | 'error' | 'empty'
 
 function fetchTasks(){
-  fetch('tasks.json').then(function(r){return r.json();}).then(function(data){
-    tasks=data.tasks;
+  loadingState='loading';
+  fetch('tasks.json').then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(data){
+    if(!data.tasks||!Array.isArray(data.tasks)||data.tasks.length===0){
+      loadingState='empty';
+      tasks=[];
+    } else {
+      tasks=data.tasks;
+      loadingState='ready';
+    }
     layout();
     requestAnimationFrame(draw);
   }).catch(function(e){
     console.error('Failed to load tasks.json:',e);
+    loadingState='error';
     tasks=[];
     layout();
     requestAnimationFrame(draw);
@@ -125,6 +137,11 @@ var i18n={
       budHint:'🌐 点击激活花苞 → 金乌',
       budLabel:'Stub'
     },
+    loading:'加载中...',
+    empty:'暂无任务数据',
+    emptyHint:'请通过 FUSANG_UPDATE_NODES 推送数据',
+    error:'加载失败',
+    errorHint:'请检查 tasks.json 或重新推送数据',
     legendTitle:'神树要件 × 程序概念',
     legendItems:[
       {icon:'🏞️',label:'底座',desc:'运行环境 Runtime'},
@@ -155,6 +172,11 @@ var i18n={
       budHint:'🌐 Click to activate bud → Jinwu',
       budLabel:'Stub'
     },
+    loading:'Loading...',
+    empty:'No tasks loaded',
+    emptyHint:'Send FUSANG_UPDATE_NODES to load data',
+    error:'Failed to load data',
+    errorHint:'Check tasks.json or send FUSANG_UPDATE_NODES',
     legendTitle:'Sacred Tree × Program Concept',
     legendItems:[
       {icon:'🏞️',label:'Pedestal',desc:'Runtime Environment'},
@@ -237,6 +259,13 @@ function draw(timestamp){
   }
 
   ctx.clearRect(0,0,W,H);
+
+  // 加载态 / 空态 / 错误态 UI
+  if(loadingState==='loading'||loadingState==='empty'||loadingState==='error'){
+    drawLoadingOrError();
+    requestAnimationFrame(draw);
+    return;
+  }
 
   // 0. 底座
   drawPedestal();
@@ -690,6 +719,10 @@ function startFixAnimation(nodeId,type){
   var task=taskById(nodeId);
   if(task) task.status='fixed';
   fixAnimations.push({nodeId:nodeId,startTime:now,phase:'flash',type:type});
+  // postMessage: notify host that AI fix is requested
+  if(task&&task.error){
+    window.parent.postMessage({type:'FUSANG_REQUEST_AI_FIX',nodeId:nodeId,error:task.error},'*');
+  }
 }
 
 function drawFixAnimations(){
@@ -1255,6 +1288,56 @@ function drawInfoCard(n){
   }
 }
 
+// ====== 加载态 / 空态 / 错误态 ======
+function drawLoadingOrError(){
+  ctx.fillStyle='#0d1117';
+  ctx.fillRect(0,0,W,H);
+
+  var cx=W/2, cy=H/2;
+
+  if(loadingState==='loading'){
+    // Loading spinner
+    var spinnerR=20, spinnerSpeed=0.08;
+    var angle=now*spinnerSpeed;
+    ctx.strokeStyle='#58a6ff';
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.arc(cx,cy-20,spinnerR,angle,angle+Math.PI*1.5);
+    ctx.stroke();
+    ctx.fillStyle='#e6edf3';
+    ctx.font='14px -apple-system,PingFang SC,sans-serif';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText(i18n[lang].loading||'Loading...',cx,cy+30);
+  }
+  else if(loadingState==='empty'){
+    ctx.fillStyle='#8b949e';
+    ctx.font='48px sans-serif';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText('🌱',cx,cy-30);
+    ctx.fillStyle='#e6edf3';
+    ctx.font='bold 16px -apple-system,PingFang SC,sans-serif';
+    ctx.fillText(i18n[lang].empty||'No tasks loaded',cx,cy+20);
+    ctx.fillStyle='#8b949e';
+    ctx.font='13px sans-serif';
+    ctx.fillText(i18n[lang].emptyHint||'Send FUSANG_UPDATE_NODES to load data',cx,cy+45);
+  }
+  else if(loadingState==='error'){
+    ctx.fillStyle='#f85149';
+    ctx.font='48px sans-serif';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText('⚠️',cx,cy-30);
+    ctx.fillStyle='#f85149';
+    ctx.font='bold 16px -apple-system,PingFang SC,sans-serif';
+    ctx.fillText(i18n[lang].error||'Failed to load data',cx,cy+20);
+    ctx.fillStyle='#8b949e';
+    ctx.font='13px sans-serif';
+    ctx.fillText(i18n[lang].errorHint||'Check tasks.json or send FUSANG_UPDATE_NODES',cx,cy+45);
+  }
+}
+
 // ====== 图例面板 ======
 function drawLegend(){
   var lx=10, ly=H-40, lw=24, lh=24;
@@ -1375,7 +1458,13 @@ cv.addEventListener('click',function(e){
     return;
   }
 
-  // 信息卡片按钮检测（AI修复 / 人工修复）
+  // 先更新 selectedNode（必须在按钮检测之前）
+  var clickedNode=hitTest(mx,my);
+  if(clickedNode){
+    selectedNode=clickedNode;
+  }
+
+  // 信息卡片按钮检测（AI修复 / 人工修复）— 必须在 selectedNode 更新之后
   if(selectedNode&&selectedNode.status==='blocked'&&selectedNode.error){
     var bcy=20+158,bcx=W-285;
     if(mx>=bcx+14&&mx<=bcx+104&&my>=bcy&&my<=bcy+22){
@@ -1386,14 +1475,48 @@ cv.addEventListener('click',function(e){
     }
   }
 
-  selectedNode=hitTest(mx,my);
+  // 如果没点到按钮，且点到了其他节点，selectedNode 已在上面更新
+  // 如果点到空白处，清除 selectedNode
+  if(!clickedNode){
+    selectedNode=null;
+  }
+  // postMessage: notify host to jump to code line (if node has file)
+  if(selectedNode&&selectedNode.file){
+    var jumpLine=(selectedNode.error&&selectedNode.error.line)||selectedNode.line||1;
+    window.parent.postMessage({type:'FUSANG_JUMP_TO_CODE',file:selectedNode.file,line:jumpLine,nodeId:selectedNode.id},'*');
+  }
 });
 
 window.addEventListener('resize',resize);
 
 window.addEventListener('message',function(e){
-  // V4: handle FUSANG_UPDATE_NODES, FUSANG_AI_FIX_RESULT
-  console.log('[Fusang] postMessage received:', e.data);
+  // V4 postMessage handler: Host → Fusang
+  // Supported messages:
+  //   FUSANG_UPDATE_NODES     : {tasks: [...]}  — replace all nodes
+  //   FUSANG_AI_FIX_RESULT   : {nodeId, success, fixedCode?, error?} — AI fix result
+  var d=e.data;
+  if(!d||!d.type) return;
+  if(d.type==='FUSANG_UPDATE_NODES'){
+    if(Array.isArray(d.tasks)) {
+      tasks=d.tasks;
+      layout();
+      requestAnimationFrame(draw);
+      console.log('[Fusang] Nodes updated via postMessage:',d.tasks.length);
+    } else {
+      console.warn('[Fusang] FUSANG_UPDATE_NODES: tasks is not an array',d.tasks);
+    }
+  } else if(d.type==='FUSANG_AI_FIX_RESULT'){
+    var t=taskById(d.nodeId);
+    if(t){
+      t.status=d.success?'done':'blocked';
+      if(d.success) { t.error=null; }
+      layout();
+      requestAnimationFrame(draw);
+      console.log('[Fusang] AI fix result:',d.nodeId,d.success);
+    }
+  } else {
+    console.log('[Fusang] Unknown postMessage type:',d.type);
+  }
 });
 
 resize();

@@ -3,6 +3,11 @@
 
 # Node modules (if any tooling added later)
 node_modules/
+analyzer/node_modules/
+
+# Build output
+dist/
+build/
 
 # Temp files
 *.tmp
