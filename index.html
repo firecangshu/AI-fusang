@@ -405,11 +405,25 @@ function drawNodes(){
     ctx.stroke();
     ctx.shadowBlur=0; // reset shadow
 
-    // goal 节点金色边框
+    // 阻塞节点：红色边框闪烁
+    if(realStatus==='blocked'){
+      var flashAlpha=0.4+0.6*Math.abs(Math.sin(now/250));
+      ctx.strokeStyle='rgba(248,81,73,'+flashAlpha+')';
+      ctx.lineWidth=2.5+flashAlpha*2;
+      ctx.stroke();
+    }
+
+    // goal 节点金色边框 + 皇冠
     if(n.isGoal){
       ctx.strokeStyle='#d4a72c';
       ctx.lineWidth=2;
       ctx.stroke();
+      // 皇冠（节点上方，放大版）
+      var crownY=n.y-NH/2-24;
+      ctx.font='22px sans-serif';
+      ctx.textAlign='center';
+      ctx.textBaseline='middle';
+      ctx.fillText('👑',n.x,crownY);
     }
 
     // 文字
@@ -421,33 +435,46 @@ function drawNodes(){
 
     // 堵点效果：红色脉冲光环 + 边框闪烁
     if(realStatus==='blocked'){
-      var pulsePhase=now/400;
-      var pulseAlpha=0.3+0.7*Math.abs(Math.sin(pulsePhase));
-      var pulseR=Math.max(NW,NH)/2+6+pulseAlpha*8;
+      var pulsePhase=now/300;
+      var pulseAlpha=0.4+0.6*Math.abs(Math.sin(pulsePhase));
+      var pulseR=Math.max(NW,NH)/2+10+pulseAlpha*22;
 
-      // 外圈红色光晕
-      var grad=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,pulseR+10);
+      // 大圈红色光晕（呼吸扩散）
+      var grad=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,pulseR+18);
       grad.addColorStop(0,'rgba(248,81,73,0)');
-      grad.addColorStop(0.5,'rgba(248,81,73,'+(pulseAlpha*0.15)+')');
+      grad.addColorStop(0.35,'rgba(248,81,73,'+(pulseAlpha*0.5)+')');
+      grad.addColorStop(0.7,'rgba(248,81,73,'+(pulseAlpha*0.15)+')');
       grad.addColorStop(1,'rgba(248,81,73,0)');
       ctx.fillStyle=grad;
       ctx.beginPath();
-      ctx.arc(n.x,n.y,pulseR+10,0,Math.PI*2);
+      ctx.arc(n.x,n.y,pulseR+18,0,Math.PI*2);
       ctx.fill();
 
-      // 红色脉冲环
+      // 外圈红色脉冲环（较淡）
+      ctx.strokeStyle='rgba(248,81,73,'+(pulseAlpha*0.6)+')';
+      ctx.lineWidth=1.5+pulseAlpha*1.5;
+      ctx.beginPath();
+      ctx.arc(n.x,n.y,pulseR+6,0,Math.PI*2);
+      ctx.stroke();
+
+      // 内圈红色脉冲环（较亮）
       ctx.strokeStyle='rgba(248,81,73,'+pulseAlpha+')';
       ctx.lineWidth=2+pulseAlpha*2;
       ctx.beginPath();
-      ctx.arc(n.x,n.y,pulseR,0,Math.PI*2);
+      ctx.arc(n.x,n.y,pulseR-4,0,Math.PI*2);
       ctx.stroke();
 
+      // 堵点图标背景圆
+      ctx.fillStyle='rgba(248,81,73,'+(pulseAlpha*0.8)+')';
+      ctx.beginPath();
+      ctx.arc(n.x,n.y-NH/2-13,9,0,Math.PI*2);
+      ctx.fill();
       // 堵点图标（感叹号）
-      ctx.fillStyle='rgba(248,81,73,'+pulseAlpha+')';
-      ctx.font='bold 14px sans-serif';
+      ctx.fillStyle='rgba(255,255,255,'+pulseAlpha+')';
+      ctx.font='bold 13px sans-serif';
       ctx.textAlign='center';
       ctx.textBaseline='middle';
-      ctx.fillText('!',n.x,n.y-NH/2-12);
+      ctx.fillText('!',n.x,n.y-NH/2-13);
     }
   });
 }
