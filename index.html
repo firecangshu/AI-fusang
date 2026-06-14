@@ -39,37 +39,20 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
 }
 
 // ====== 数据：5层通用模型 ======
-var tasks=[
-  {id:'def',   layer:0, status:'done',
-   label:{zh:'定义',en:'Definition'},
-   desc:{zh:'出发点：要解决什么问题',en:'Starting point: what problem to solve'},
-   myth:{zh:'山形底座',en:'Pedestal'}},
-  {id:'io',    layer:1, status:'done',
-   label:{zh:'输入输出',en:'I/O'},
-   desc:{zh:'分析需求：输入/输出/边界/约束',en:'Analyze requirements: input/output/boundary/constraints'},
-   myth:{zh:'树根',en:'Roots'}},
-  {id:'data',  layer:2, status:'blocked',
-   error:{message:{zh:'Redis连接失败: ECONNREFUSED',en:'Redis connection failed: ECONNREFUSED'}, file:'config/redis.js', line:15, callChain:['main()','initDB()','connectRedis()']},
-   label:{zh:'数据结构',en:'Data Structure'},
-   desc:{zh:'定义内部数据模型（阻塞演示）',en:'Define internal data model (blocked demo)'},
-   myth:{zh:'枝干',en:'Branch'}},
-  {id:'api',   layer:2, status:'waiting',
-   label:{zh:'外部接口',en:'External API'},
-   desc:{zh:'定义外部API端口（预留）',en:'Define external API endpoints (stub)'},
-   myth:{zh:'枝干 · 花苞',en:'Branch · Bud'}},
-  {id:'impl',  layer:3, status:'todo',
-   label:{zh:'实现',en:'Implementation'},
-   desc:{zh:'核心逻辑实现',en:'Core logic implementation'},
-   myth:{zh:'枝干',en:'Branch'}},
-  {id:'verify',layer:4, status:'todo',
-   label:{zh:'验证',en:'Verification'},
-   desc:{zh:'测试/检查',en:'Test/check'},
-   myth:{zh:'枝干',en:'Branch'}},
-  {id:'goal',  layer:5, status:'todo', isGoal:true,
-   label:{zh:'目标·交付',en:'Goal · Deliver'},
-   desc:{zh:'流程结束，交付产物',en:'Process ends, deliver product'},
-   myth:{zh:'树顶',en:'Crown'}}
-];
+var tasks=[];  // loaded from tasks.json
+
+function fetchTasks(){
+  fetch('tasks.json').then(function(r){return r.json();}).then(function(data){
+    tasks=data.tasks;
+    layout();
+    requestAnimationFrame(draw);
+  }).catch(function(e){
+    console.error('Failed to load tasks.json:',e);
+    tasks=[];
+    layout();
+    requestAnimationFrame(draw);
+  });
+}
 var edges=[
   {from:'def',to:'io'},
   {from:'io',to:'data'},
@@ -1414,7 +1397,7 @@ window.addEventListener('message',function(e){
 });
 
 resize();
-requestAnimationFrame(draw);
+fetchTasks();
 </script>
 </body>
 </html>

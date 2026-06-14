@@ -1,0 +1,72 @@
+{
+  "tasks": [
+    {
+      "id": "def",
+      "label": { "zh": "程序定义", "en": "Definition" },
+      "layer": 0,
+      "status": "done",
+      "desc": { "zh": "出发点：main.js 程序入口", "en": "Starting point: main.js entry" },
+      "myth": { "zh": "山形底座", "en": "Pedestal" },
+      "file": "main.js"
+    },
+    {
+      "id": "io",
+      "label": { "zh": "输入输出", "en": "I/O" },
+      "layer": 1,
+      "status": "done",
+      "desc": { "zh": "API 路由定义（routes/api.js）", "en": "API routes definition (routes/api.js)" },
+      "myth": { "zh": "树根", "en": "Roots" },
+      "file": "routes/api.js"
+    },
+    {
+      "id": "data",
+      "label": { "zh": "数据结构", "en": "Data Structure" },
+      "layer": 2,
+      "status": "blocked",
+      "error": {
+        "message": { "zh": "Redis连接失败: ECONNREFUSED", "en": "Redis connection failed: ECONNREFUSED" },
+        "file": "config/redis.js",
+        "line": 5,
+        "callChain": ["main()", "initDB()", "connectRedis()"]
+      },
+      "desc": { "zh": "Redis 配置错误（端口 6380 → 应是 6379）", "en": "Redis config error (port 6380 → should be 6379)" },
+      "myth": { "zh": "枝干", "en": "Branch" },
+      "file": "config/redis.js"
+    },
+    {
+      "id": "api",
+      "label": { "zh": "外部接口", "en": "External API" },
+      "layer": 2,
+      "status": "waiting",
+      "desc": { "zh": "API Stub 待实现（routes/api.js）", "en": "API Stub to implement (routes/api.js)" },
+      "myth": { "zh": "枝干 · 花苞", "en": "Branch · Bud" },
+      "file": "routes/api.js"
+    },
+    {
+      "id": "impl",
+      "label": { "zh": "核心实现", "en": "Implementation" },
+      "layer": 3,
+      "status": "todo",
+      "desc": { "zh": "main.js 核心逻辑（因 Bug 阻塞）", "en": "main.js core logic (blocked by Bug)" },
+      "myth": { "zh": "枝干", "en": "Branch" },
+      "file": "main.js"
+    },
+    {
+      "id": "verify",
+      "label": { "zh": "验证测试", "en": "Verification" },
+      "layer": 4,
+      "status": "todo",
+      "desc": { "zh": "测试/检查（待实现）", "en": "Test/check (to implement)" },
+      "myth": { "zh": "枝干", "en": "Branch" }
+    },
+    {
+      "id": "goal",
+      "label": { "zh": "目标·交付", "en": "Goal · Deliver" },
+      "layer": 5,
+      "status": "todo",
+      "isGoal": true,
+      "desc": { "zh": "流程结束，交付产物", "en": "Process ends, deliver product" },
+      "myth": { "zh": "树顶", "en": "Crown" }
+    }
+  ]
+}
