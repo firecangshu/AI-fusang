@@ -1,72 +1,193 @@
-{
-  "tasks": [
-    {
-      "id": "def",
-      "label": { "zh": "程序定义", "en": "Definition" },
-      "layer": 0,
-      "status": "done",
-      "desc": { "zh": "出发点：main.js 程序入口", "en": "Starting point: main.js entry" },
-      "myth": { "zh": "山形底座", "en": "Pedestal" },
-      "file": "main.js"
+[
+  {
+    "id": "entry",
+    "label": {
+      "zh": "程序入口",
+      "en": "Entry Point"
     },
-    {
-      "id": "io",
-      "label": { "zh": "输入输出", "en": "I/O" },
-      "layer": 1,
-      "status": "done",
-      "desc": { "zh": "API 路由定义（routes/api.js）", "en": "API routes definition (routes/api.js)" },
-      "myth": { "zh": "树根", "en": "Roots" },
-      "file": "routes/api.js"
+    "layer": 0,
+    "status": "done",
+    "desc": {
+      "zh": "程序启动入口，main() 函数",
+      "en": "Program entry point, main() function"
     },
-    {
-      "id": "data",
-      "label": { "zh": "数据结构", "en": "Data Structure" },
-      "layer": 2,
-      "status": "blocked",
-      "error": {
-        "message": { "zh": "Redis连接失败: ECONNREFUSED", "en": "Redis connection failed: ECONNREFUSED" },
-        "file": "config/redis.js",
-        "line": 5,
-        "callChain": ["main()", "initDB()", "connectRedis()"]
-      },
-      "desc": { "zh": "Redis 配置错误（端口 6380 → 应是 6379）", "en": "Redis config error (port 6380 → should be 6379)" },
-      "myth": { "zh": "枝干", "en": "Branch" },
-      "file": "config/redis.js"
+    "myth": {
+      "zh": "主干起点",
+      "en": "Trunk Start"
     },
-    {
-      "id": "api",
-      "label": { "zh": "外部接口", "en": "External API" },
-      "layer": 2,
-      "status": "waiting",
-      "desc": { "zh": "API Stub 待实现（routes/api.js）", "en": "API Stub to implement (routes/api.js)" },
-      "myth": { "zh": "枝干 · 花苞", "en": "Branch · Bud" },
-      "file": "routes/api.js"
+    "file": "src/main.ts",
+    "error": null
+  },
+  {
+    "id": "config",
+    "label": {
+      "zh": "配置管理",
+      "en": "Config"
     },
-    {
-      "id": "impl",
-      "label": { "zh": "核心实现", "en": "Implementation" },
-      "layer": 3,
-      "status": "todo",
-      "desc": { "zh": "main.js 核心逻辑（因 Bug 阻塞）", "en": "main.js core logic (blocked by Bug)" },
-      "myth": { "zh": "枝干", "en": "Branch" },
-      "file": "main.js"
+    "layer": 1,
+    "status": "done",
+    "desc": {
+      "zh": "环境变量、配置文件加载",
+      "en": "Environment variables, config file loading"
     },
-    {
-      "id": "verify",
-      "label": { "zh": "验证测试", "en": "Verification" },
-      "layer": 4,
-      "status": "todo",
-      "desc": { "zh": "测试/检查（待实现）", "en": "Test/check (to implement)" },
-      "myth": { "zh": "枝干", "en": "Branch" }
+    "myth": {
+      "zh": "树根 · 密钥",
+      "en": "Roots · Keys"
     },
-    {
-      "id": "goal",
-      "label": { "zh": "目标·交付", "en": "Goal · Deliver" },
-      "layer": 5,
-      "status": "todo",
-      "isGoal": true,
-      "desc": { "zh": "流程结束，交付产物", "en": "Process ends, deliver product" },
-      "myth": { "zh": "树顶", "en": "Crown" }
-    }
-  ]
-}
+    "file": "src/config/index.ts",
+    "error": null
+  },
+  {
+    "id": "db",
+    "label": {
+      "zh": "数据库连接",
+      "en": "Database"
+    },
+    "layer": 2,
+    "status": "done",
+    "desc": {
+      "zh": "PostgreSQL 连接池管理",
+      "en": "PostgreSQL connection pool management"
+    },
+    "myth": {
+      "zh": "枝干",
+      "en": "Branch"
+    },
+    "file": "src/db/connection.ts",
+    "error": null
+  },
+  {
+    "id": "cache",
+    "label": {
+      "zh": "缓存层",
+      "en": "Cache"
+    },
+    "layer": 2,
+    "status": "done",
+    "desc": {
+      "zh": "Redis 缓存服务",
+      "en": "Redis cache service"
+    },
+    "myth": {
+      "zh": "枝干",
+      "en": "Branch"
+    },
+    "file": "src/cache/redis.ts",
+    "error": null
+  },
+  {
+    "id": "api",
+    "label": {
+      "zh": "API 服务",
+      "en": "API Server"
+    },
+    "layer": 3,
+    "status": "done",
+    "desc": {
+      "zh": "REST API 路由和控制器",
+      "en": "REST API routes and controllers"
+    },
+    "myth": {
+      "zh": "金乌 · 触发器",
+      "en": "Crow · Trigger"
+    },
+    "file": "src/api/routes.ts",
+    "error": null
+  },
+  {
+    "id": "auth",
+    "label": {
+      "zh": "用户认证",
+      "en": "Auth"
+    },
+    "layer": 3,
+    "status": "done",
+    "desc": {
+      "zh": "JWT 认证中间件",
+      "en": "JWT authentication middleware"
+    },
+    "myth": {
+      "zh": "花苞",
+      "en": "Bud"
+    },
+    "file": "src/auth/jwt.ts",
+    "error": null
+  },
+  {
+    "id": "frontend",
+    "label": {
+      "zh": "前端应用",
+      "en": "Frontend"
+    },
+    "layer": 4,
+    "status": "done",
+    "desc": {
+      "zh": "React 18 + Vite 前端应用",
+      "en": "React 18 + Vite frontend app"
+    },
+    "myth": {
+      "zh": "枝干",
+      "en": "Branch"
+    },
+    "file": "client/App.jsx",
+    "error": null
+  },
+  {
+    "id": "tests",
+    "label": {
+      "zh": "测试套件",
+      "en": "Tests"
+    },
+    "layer": 4,
+    "status": "done",
+    "desc": {
+      "zh": "Jest + Supertest 单元测试和集成测试",
+      "en": "Jest + Supertest unit and integration tests"
+    },
+    "myth": {
+      "zh": "枝干",
+      "en": "Branch"
+    },
+    "file": "test/**/*.test.js",
+    "error": null
+  },
+  {
+    "id": "ci",
+    "label": {
+      "zh": "CI/CD",
+      "en": "CI/CD"
+    },
+    "layer": 5,
+    "status": "done",
+    "desc": {
+      "zh": "GitHub Actions 自动化部署流水线",
+      "en": "GitHub Actions automated deployment pipeline"
+    },
+    "myth": {
+      "zh": "盘龙 · 监控",
+      "en": "Dragon · Monitor"
+    },
+    "file": ".github/workflows/ci.yml",
+    "error": null
+  },
+  {
+    "id": "goal",
+    "label": {
+      "zh": "项目完成",
+      "en": "Project Complete"
+    },
+    "layer": 6,
+    "status": "done",
+    "isGoal": true,
+    "desc": {
+      "zh": "生产环境部署，用户可使用完整功能",
+      "en": "Production deployment, users can use full features"
+    },
+    "myth": {
+      "zh": "树顶 · 太阳",
+      "en": "Crown · Sun"
+    },
+    "file": "deploy.sh",
+    "error": null
+  }
+]

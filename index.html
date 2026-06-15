@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>AI-Fusang</title>
+<title>AI-Fusang V3</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden;background:#0d1117;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif}
@@ -15,6 +15,20 @@ canvas{display:block}
 <div id="lang-switcher" style="position:fixed;top:10px;right:10px;z-index:10;display:flex;gap:6px;align-items:center;">
   <button id="btn-zh" onclick="setLang('zh')" style="background:rgba(33,38,45,0.9);color:#e6edf3;border:1px solid #30363d;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🇨🇳 中文</button>
   <button id="btn-en" onclick="setLang('en')" style="background:rgba(33,38,45,0.9);color:#e6edf3;border:1px solid #30363d;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🇺🇸 English</button>
+  <button id="btn-debug" onclick="toggleDebug()" style="background:rgba(33,38,45,0.9);color:#f0883e;border:1px solid #30363d;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🐛</button>
+</div>
+<div id="debug-panel" style="position:fixed;bottom:10px;right:10px;z-index:30;display:none;width:360px;max-height:300px;background:rgba(13,17,23,0.97);border:1px solid #30363d;border-radius:8px;overflow:hidden;">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#161b22;border-bottom:1px solid #30363d;">
+    <span style="color:#f0883e;font-size:12px;font-weight:bold;">Debug Console</span>
+    <div style="display:flex;gap:6px;">
+      <button onclick="checkAllStatus()" style="background:#f0883e;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;">🔍 Status</button>
+      <button onclick="stressTest()" style="background:#3fb950;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;">🧪 Test</button>
+      <button onclick="copyDebugLog()" style="background:#21262d;color:#8b949e;border:1px solid #30363d;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;">📋 Copy</button>
+      <button onclick="clearDebugLog()" style="background:#21262d;color:#8b949e;border:1px solid #30363d;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;">🗑️ Clear</button>
+      <button onclick="toggleDebug()" style="background:#21262d;color:#8b949e;border:1px solid #30363d;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;">✕</button>
+    </div>
+  </div>
+  <pre id="debug-log" style="margin:0;padding:8px;font-size:11px;font-family:monospace;color:#c9d1d9;overflow-y:auto;max-height:260px;white-space:pre-wrap;word-break:break-all;"></pre>
 </div>
 <script>
 /* ===== postMessage Protocol (V4 draft) =====
@@ -38,47 +52,236 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
   };
 }
 
+// ====== 调试控制台 ======
+var _debugLogs=[];
+var _origLog=console.log;
+var _origErr=console.error;
+function _addDebugLog(type,args){
+  var msg=Array.prototype.slice.call(args).map(function(a){
+    if(a===null) return 'null';
+    if(a===undefined) return 'undefined';
+    if(typeof a==='object') try{return JSON.stringify(a);}catch(e){return String(a);}
+    return String(a);
+  }).join(' ');
+  _debugLogs.push((type==='error'?'❌ ':'')+msg);
+  var el=document.getElementById('debug-log');
+  if(el){el.textContent=_debugLogs.join('\n');el.scrollTop=el.scrollHeight;}
+}
+console.log=function(){_origLog.apply(console,arguments);_addDebugLog('log',arguments);};
+console.error=function(){_origErr.apply(console,arguments);_addDebugLog('error',arguments);};
+function toggleDebug(){
+  var p=document.getElementById('debug-panel');
+  p.style.display=p.style.display==='none'?'block':'none';
+}
+function copyDebugLog(){
+  var el=document.getElementById('debug-log');
+  if(el&&el.textContent){navigator.clipboard.writeText(el.textContent).then(function(){alert('Copied!');});}
+}
+function clearDebugLog(){_debugLogs=[];var el=document.getElementById('debug-log');if(el)el.textContent='';}
+function checkAllStatus(){
+  console.log('=== STATUS CHECK ===');
+  tasks.forEach(function(t){
+    var deps=edges.filter(function(e){return e.to===t.id;}).map(function(e){
+      var u=taskById(e.from);
+      return e.from+'('+u.status+'/'+u.error+')';
+    }).join(', ');
+    var eff=getEffectiveStatus(t.id);
+    console.log(t.id+' | status='+t.status+' | error='+JSON.stringify(t.error)+' | deps=['+deps+'] => '+eff);
+  });
+}
+
+// ====== 自动压力测试 ======
+function _resetAll(){
+  tasks.forEach(function(t){t.status='done';t.error=null;});
+}
+function _getAllEff(){
+  return tasks.map(function(t){return {id:t.id,eff:getEffectiveStatus(t.id)};});
+}
+function _assert(testId,condition,msg){
+  if(condition){console.log('  ✅ '+testId+': '+msg);}
+  else{console.log('  ❌ '+testId+': '+msg);}
+}
+function stressTest(){
+  console.log('========================================');
+  console.log('🧪 AI-Fusang 逻辑压力测试');
+  console.log('========================================');
+  var pass=0,fail=0;
+  var nodeIds=tasks.map(function(t){return t.id;});
+
+  // === T1: 全绿开局 ===
+  console.log('\n--- T1: 全绿开局 ---');
+  _resetAll();
+  var r1=_getAllEff();
+  var allDone=r1.every(function(x){return x.eff==='done';});
+  _assert('T1',allDone,'所有节点 effectiveStatus=done');
+  allDone?pass++:fail++;
+
+  // === T2: 逐节点注入故障 ===
+  console.log('\n--- T2: 逐节点注入故障+验证传导 ---');
+  nodeIds.forEach(function(nid){
+    _resetAll();
+    injectFault(nid);
+    var selfEff=getEffectiveStatus(nid);
+    _assert('T2-'+nid,selfEff==='blocked',nid+' 自身=blocked');
+    selfEff==='blocked'?pass++:fail++;
+    // 检查下游是否 waiting
+    var downstream=_getDownstream(nid);
+    downstream.forEach(function(did){
+      var dEff=getEffectiveStatus(did);
+      _assert('T2-'+nid+'→'+did,dEff==='waiting',did+' 被传导=waiting');
+      dEff==='waiting'?pass++:fail++;
+    });
+    // 检查非下游不受影响
+    var safeIds=nodeIds.filter(function(x){return x!==nid&&downstream.indexOf(x)===-1;});
+    safeIds.forEach(function(sid){
+      var sEff=getEffectiveStatus(sid);
+      _assert('T2-safe-'+sid,sEff==='done',sid+' 不受影响=done');
+      sEff==='done'?pass++:fail++;
+    });
+  });
+
+  // === T3: 逐节点注入+修复 ===
+  console.log('\n--- T3: 逐节点注入+修复→全绿 ---');
+  nodeIds.forEach(function(nid){
+    _resetAll();
+    injectFault(nid);
+    // 模拟修复（跳过动画，直接设状态）
+    var t=taskById(nid);
+    t.status='done';t.error=null;recalcAll();
+    var r3=_getAllEff();
+    var allGreen=r3.every(function(x){return x.eff==='done';});
+    _assert('T3-'+nid,allGreen,'修复'+nid+'后全绿');
+    allGreen?pass++:fail++;
+  });
+
+  // === T4: 同层双故障(db+cache) ===
+  console.log('\n--- T4: 同层双故障(db+cache) ---');
+  _resetAll();
+  injectFault('db');injectFault('cache');
+  _assert('T4-api',getEffectiveStatus('api')==='waiting','api=waiting(两个上游都坏)');
+  getEffectiveStatus('api')==='waiting'?pass++:fail++;
+  _assert('T4-auth',getEffectiveStatus('auth')==='waiting','auth=waiting');
+  getEffectiveStatus('auth')==='waiting'?pass++:fail++;
+  // 修 db → api/auth 仍然 waiting（cache 还坏）
+  var dbTask=taskById('db');dbTask.status='done';dbTask.error=null;recalcAll();
+  _assert('T4-partial',getEffectiveStatus('api')==='waiting','修db后api仍waiting(cache还坏)');
+  getEffectiveStatus('api')==='waiting'?pass++:fail++;
+  // 修 cache → 全绿
+  var cacheTask=taskById('cache');cacheTask.status='done';cacheTask.error=null;recalcAll();
+  var r4=_getAllEff();
+  var allGreen4=r4.every(function(x){return x.eff==='done';});
+  _assert('T4-full',allGreen4,'修db+cache后全绿');
+  allGreen4?pass++:fail++;
+
+  // === T5: 先修下游再修上游 ===
+  console.log('\n--- T5: 先修下游(api)→上游(config)还坏→api变紫 ---');
+  _resetAll();
+  injectFault('config');injectFault('api');
+  // 先修 api
+  var apiTask=taskById('api');apiTask.status='done';apiTask.error=null;recalcAll();
+  var apiEff=getEffectiveStatus('api');
+  _assert('T5-api-purple',apiEff==='waiting','修api后变紫(上游config还坏)');
+  apiEff==='waiting'?pass++:fail++;
+  // 再修 config → 全绿
+  var configTask=taskById('config');configTask.status='done';configTask.error=null;recalcAll();
+  var r5=_getAllEff();
+  var allGreen5=r5.every(function(x){return x.eff==='done';});
+  _assert('T5-full',allGreen5,'修config后全绿');
+  allGreen5?pass++:fail++;
+
+  // === T6: 全节点故障+从上往下逐个修复 ===
+  console.log('\n--- T6: 全节点故障+逐个修复 ---');
+  _resetAll();
+  nodeIds.forEach(function(nid){injectFault(nid);});
+  var allBlocked=_getAllEff().every(function(x){return x.eff==='blocked';});
+  _assert('T6-all-blocked',allBlocked,'全节点注入后全blocked');
+  allBlocked?pass++:fail++;
+  // 从上往下逐个修
+  nodeIds.forEach(function(nid){
+    var t=taskById(nid);t.status='done';t.error=null;recalcAll();
+  });
+  var r6=_getAllEff();
+  var allGreen6=r6.every(function(x){return x.eff==='done';});
+  _assert('T6-all-green',allGreen6,'逐个修完后全绿');
+  allGreen6?pass++:fail++;
+
+  // === T7: 反复注入+修复3轮 ===
+  console.log('\n--- T7: 反复注入+修复3轮 ---');
+  _resetAll();
+  var roundOk=true;
+  for(var round=0;round<3;round++){
+    // 随机注入3个故障
+    var shuffled=nodeIds.slice().sort(function(){return Math.random()-0.5;});
+    for(var fi=0;fi<3;fi++){injectFault(shuffled[fi]);}
+    // 修所有
+    tasks.forEach(function(t){if(t.error){t.status='done';t.error=null;}recalcAll();});
+    var r7=_getAllEff();
+    var ok=r7.every(function(x){return x.eff==='done';});
+    if(!ok) roundOk=false;
+  }
+  _assert('T7-rounds',roundOk,'3轮随机注入+修复后全绿');
+  roundOk?pass++:fail++;
+
+  // === 结果 ===
+  _resetAll();
+  console.log('\n========================================');
+  console.log('🧪 测试完成: ✅ '+pass+' 通过, ❌ '+fail+' 失败');
+  console.log('========================================');
+}
+
+function _getDownstream(nodeId){
+  var result=[];
+  var visited={};
+  function dfs(id){
+    if(visited[id]) return;
+    visited[id]=true;
+    edges.filter(function(e){return e.from===id;}).forEach(function(e){
+      result.push(e.to);
+      dfs(e.to);
+    });
+  }
+  dfs(nodeId);
+  return result;
+}
+
 // ====== 数据：5层通用模型 ======
 var tasks=[];  // loaded from tasks.json
-var loadingState='loading'; // 'loading' | 'ready' | 'error' | 'empty'
 
 function fetchTasks(){
-  loadingState='loading';
-  fetch('tasks.json').then(function(r){
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    return r.json();
-  }).then(function(data){
-    if(!data.tasks||!Array.isArray(data.tasks)||data.tasks.length===0){
-      loadingState='empty';
-      tasks=[];
-    } else {
-      tasks=data.tasks;
-      loadingState='ready';
-    }
+  fetch('tasks.json').then(function(r){return r.json();}).then(function(data){
+    tasks=data.tasks||data;
+    console.log('[DEBUG] tasks loaded, count=', tasks.length);
+    tasks.forEach(function(t){console.log('[DEBUG]', t.id, 'status=', t.status, 'error=', t.error);});
     layout();
     requestAnimationFrame(draw);
   }).catch(function(e){
     console.error('Failed to load tasks.json:',e);
-    loadingState='error';
     tasks=[];
     layout();
     requestAnimationFrame(draw);
   });
 }
 var edges=[
-  {from:'def',to:'io'},
-  {from:'io',to:'data'},
-  {from:'io',to:'api'},
-  {from:'data',to:'impl'},
-  {from:'api',to:'impl'},
-  {from:'impl',to:'verify'},
-  {from:'verify',to:'goal'}
+  {from:'entry',to:'config'},
+  {from:'config',to:'db'},
+  {from:'config',to:'cache'},
+  {from:'db',to:'api'},
+  {from:'db',to:'auth'},
+  {from:'cache',to:'api'},
+  {from:'cache',to:'auth'},
+  {from:'api',to:'frontend'},
+  {from:'api',to:'tests'},
+  {from:'auth',to:'frontend'},
+  {from:'auth',to:'tests'},
+  {from:'frontend',to:'ci'},
+  {from:'tests',to:'ci'},
+  {from:'ci',to:'goal'}
 ];
 
 // ====== 常量 ======
 var SC={done:'#3fb950','in-progress':'#58a6ff',todo:'#6e7681',blocked:'#f85149',waiting:'#bc8cff'};
 // SL removed - unused, status labels now in i18n
-var NW=120,NH=40,PAD_X=120,PAD_TOP=60,LGAP=80,PED_H=70;
+var NW=120,NH=40,PAD_X=120,PAD_TOP=50,LGAP=82,PED_H=65;
 
 // ====== Canvas 初始化 ======
 var cv=document.getElementById('c');
@@ -115,12 +318,12 @@ var dragonParticles=[];  // {t, speed} t∈[0,1] 沿龙身路径参数
 var blockedWarnings=[];   // {nodeId, startTime} 阻塞节点警告
 var edgeParticles=[];    // {edge, t, speed} 边级逆流粒子
 var fixAnimations=[];    // {nodeId, startTime, phase:'flash'|'glow'|'particles'}
-var demoMode=true,demoStep=0,demoStartTime=0;
+var currentMode=null,modeStep=0,modeStartTime=0;
 
 // ====== i18n 双语 ======
 var i18n={
   zh:{
-    title:'AI-Fusang V3 · 扶桑逻辑通天树',
+    title:'AI-Fusang · 扶桑逻辑通天树',
     status:{done:'已完成','in-progress':'进行中',todo:'待办',blocked:'阻塞',waiting:'等待中'},
     pedestal:'🏞️ 运行环境 Runtime',
     roots:{expanded:'🔑 配置 ▲',collapsed:'🔑 配置 ▼'},
@@ -135,13 +338,9 @@ var i18n={
       aiFix:'🤖 AI修复',
       manualFix:'✋ 人工修复',
       budHint:'🌐 点击激活花苞 → 金乌',
-      budLabel:'Stub'
+      budLabel:'Stub',
+      injectFault:'⚡ 注入故障'
     },
-    loading:'加载中...',
-    empty:'暂无任务数据',
-    emptyHint:'请通过 FUSANG_UPDATE_NODES 推送数据',
-    error:'加载失败',
-    errorHint:'请检查 tasks.json 或重新推送数据',
     legendTitle:'神树要件 × 程序概念',
     legendItems:[
       {icon:'🏞️',label:'底座',desc:'运行环境 Runtime'},
@@ -155,7 +354,7 @@ var i18n={
     ]
   },
   en:{
-    title:'AI-Fusang V3 · Logic Tree of Code',
+    title:'AI-Fusang · Logic Tree of Code',
     status:{done:'Done','in-progress':'In Progress',todo:'Todo',blocked:'Blocked',waiting:'Waiting'},
     pedestal:'🏞️ Runtime Environment',
     roots:{expanded:'🔑 Config ▲',collapsed:'🔑 Config ▼'},
@@ -170,13 +369,9 @@ var i18n={
       aiFix:'🤖 AI Fix',
       manualFix:'✋ Manual Fix',
       budHint:'🌐 Click to activate bud → Jinwu',
-      budLabel:'Stub'
+      budLabel:'Stub',
+      injectFault:'⚡ Inject Fault'
     },
-    loading:'Loading...',
-    empty:'No tasks loaded',
-    emptyHint:'Send FUSANG_UPDATE_NODES to load data',
-    error:'Failed to load data',
-    errorHint:'Check tasks.json or send FUSANG_UPDATE_NODES',
     legendTitle:'Sacred Tree × Program Concept',
     legendItems:[
       {icon:'🏞️',label:'Pedestal',desc:'Runtime Environment'},
@@ -235,37 +430,32 @@ function easeInOut(t){return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;}
 function draw(timestamp){
   now=timestamp||0;
 
-  // Demo 自动播放状态机
-  if(demoMode){
-    var elapsed=now-demoStartTime;
-    if(demoStep===0&&elapsed>16000){
-      demoStep=1;demoStartTime=now;
-      tasks.forEach(function(t){if(t.id==='data')t.status='blocked';else if(t.id!=='goal')t.status='done';});
-    } else if(demoStep===1&&elapsed>3000){
-      demoStep=2;
-      // data节点已blocked，只是等待2s让观众看到
-    } else if(demoStep===2&&elapsed>5000){
-      demoStep=3;
-      selectedNode=taskById('data');
-    } else if(demoStep===3&&elapsed>8000){
-      demoStep=4;
-      startFixAnimation('data','ai');
-    } else if(demoStep===4&&elapsed>11000){
-      demoStep=5;
-    } else if(demoStep===5&&elapsed>16000){
-      demoStep=0;demoStartTime=now;
-      rootsExpanded=false;selectedNode=null;
+  // 模式状态机
+  if(currentMode==='auto'){
+    var elapsed=now-modeStartTime;
+    if(modeStep===0){
+      // 全绿状态，等待2s后植入故障
+      if(elapsed>2000){
+        modeStep=1;modeStartTime=now;
+        injectRandomFault();
+      }
+    } else if(modeStep===1){
+      // 红+紫显示中，等待3s后自动AI修复
+      if(elapsed>3000){
+        modeStep=2;modeStartTime=now;
+        var redNode=tasks.find(function(t){return t.status==='blocked';});
+        if(redNode) startFixAnimation(redNode.id,'ai');
+      }
+    } else if(modeStep===2){
+      // 修复动画中，等待动画完成+2s后重置
+      if(fixAnimations.length===0&&elapsed>2000){
+        modeStep=0;modeStartTime=now;
+        resetToAllGreen();
+      }
     }
   }
 
   ctx.clearRect(0,0,W,H);
-
-  // 加载态 / 空态 / 错误态 UI
-  if(loadingState==='loading'||loadingState==='empty'||loadingState==='error'){
-    drawLoadingOrError();
-    requestAnimationFrame(draw);
-    return;
-  }
 
   // 0. 底座
   drawPedestal();
@@ -390,7 +580,7 @@ function drawNodes(){
     var x=n.x-NW/2,y=n.y-NH/2;
     var isHover=hoveredNode&&hoveredNode.id===n.id;
     var isSel=selectedNode&&selectedNode.id===n.id;
-    var realStatus=taskById(n.id)?taskById(n.id).status:n.status;
+    var realStatus=getEffectiveStatus(n.id);
 
     // Hover: 外发光效果
     if(isHover&&!isSel){
@@ -498,7 +688,7 @@ function drawJinwuAndBuds(){
 
     var budY=n.y-NH/2-22;
     // 从 tasks 取实时状态（layoutNodes 是 layout() 时的快照）
-    var realStatus=taskById(n.id)?taskById(n.id).status:n.status;
+    var realStatus=getEffectiveStatus(n.id);
 
     // 检查是否有转场动画进行中
     var trans=budTransitions.find(function(t){return t.id===n.id;});
@@ -714,15 +904,60 @@ function cleanupAnimations(){
   });
 }
 
+// ====== 动态计算节点有效状态（考虑依赖链）======
+// 返回: 'done'|'in-progress'|'todo'|'waiting'|'blocked'
+// blocked = 自身有 error（根因）；waiting = 上游有 blocked（被传导阻塞）
+function getEffectiveStatus(nodeId,visited){
+  visited=visited||{};
+  if(visited[nodeId]) return 'waiting';
+  visited[nodeId]=true;
+  var task=taskById(nodeId);
+  if(!task) return 'todo';
+  if(task.error) return 'blocked';
+  var depEdges=edges.filter(function(e){return e.to===nodeId;});
+  if(depEdges.length===0) {var s=task.status||'todo'; return s==='fixed'?'done':s;}
+  var anyBlocked=false, allDone=true;
+  for(var i=0;i<depEdges.length;i++){
+    var depStatus=getEffectiveStatus(depEdges[i].from,Object.assign({},visited));
+    if(depStatus==='blocked'){anyBlocked=true; break;}
+    if(depStatus!=='done') allDone=false;
+  }
+  if(anyBlocked) return 'waiting';
+  if(!allDone) return 'waiting';
+  var s=task.status||'todo';
+  return s==='fixed'?'done':s;
+}
+
 // ====== 修复庆祝动画 ======
+
+// 修复后全量重算：暴力多轮扫描直到稳定
+function recalcAll(){
+  for(var iter=0;iter<20;iter++){
+    var changed=false;
+    tasks.forEach(function(t){
+      if(t.error) return;
+      if(t.status==='done') return;
+      var ups=edges.filter(function(e){return e.to===t.id;});
+      if(ups.length===0) return;
+      var ok=ups.every(function(e){var u=taskById(e.from);return u&&u.status==='done'&&u.error==null;});
+      if(ok){t.status='done';t.error=null;changed=true;}
+    });
+    if(!changed) break;
+  }
+}
+
+function injectFault(nodeId){
+  var task=taskById(nodeId);
+  if(!task) return;
+  task.status='blocked';
+  task.error={message:{zh:'注入故障：模拟错误',en:'Injected fault: simulated error'},file:task.file||'',line:1,callChain:[]};
+  // 不需要动画，直接重绘
+}
+
 function startFixAnimation(nodeId,type){
   var task=taskById(nodeId);
   if(task) task.status='fixed';
   fixAnimations.push({nodeId:nodeId,startTime:now,phase:'flash',type:type});
-  // postMessage: notify host that AI fix is requested
-  if(task&&task.error){
-    window.parent.postMessage({type:'FUSANG_REQUEST_AI_FIX',nodeId:nodeId,error:task.error},'*');
-  }
 }
 
 function drawFixAnimations(){
@@ -732,7 +967,7 @@ function drawFixAnimations(){
     if(f.phase==='flash'&&elapsed>=300){
       f.phase='glow';
       var task=taskById(f.nodeId);
-      if(task&&task.status==='fixed') task.status='done';
+      if(task&&task.status==='fixed'){task.status='done';task.error=null;recalcAll();}
     }
     if(f.phase==='glow'&&elapsed>=1100){
       f.phase='particles';
@@ -1178,8 +1413,10 @@ function drawDragon(){
 
 // ====== 信息卡片 ======
 function drawInfoCard(n){
-  var cx=W-285,cy=20,cw=270,ch=hasError?200:150;
-  var realStatus=taskById(n.id)?taskById(n.id).status:n.status;var hasError=realStatus==='blocked'&&!!n.error;
+  var realStatus=getEffectiveStatus(n.id);
+  var liveTask=taskById(n.id);
+  var hasError=realStatus==='blocked'&&!!(liveTask&&liveTask.error);
+  var cx=W-285,cy=20,cw=270,ch=hasError?200:(realStatus==='done'?180:150);
   var maxTextW=cw-28; // usable text width after padding
 
   ctx.fillStyle='rgba(22,27,34,0.95)';
@@ -1233,7 +1470,7 @@ function drawInfoCard(n){
     ctx.font='bold 11px sans-serif';
     ctx.textAlign='left';
     ctx.textBaseline='top';
-    var errMsg=n.error.message[lang];
+    var errMsg=liveTask.error.message[lang];
     if(ctx.measureText(i18n[lang].infoCard.error+': '+errMsg).width>maxTextW){
       // try to fit just the message part
       var prefix=i18n[lang].infoCard.error+': ';
@@ -1245,14 +1482,14 @@ function drawInfoCard(n){
       }
       ctx.fillText(prefix+errMsg,cx+14,cy+116);
     }else{
-      ctx.fillText(i18n[lang].infoCard.error+': '+n.error.message[lang],cx+14,cy+116);
+      ctx.fillText(i18n[lang].infoCard.error+': '+liveTask.error.message[lang],cx+14,cy+116);
     }
 
     // 调用链（更小的字号，截断）
-    if(n.error.callChain){
+    if(liveTask.error.callChain){
       ctx.fillStyle='#8b949e';
       ctx.font='9px monospace';
-      var ccStr=n.error.callChain.join(' \u2192 ');
+      var ccStr=liveTask.error.callChain.join(' \u2192 ');
       if(ctx.measureText(ccStr).width>maxTextW){
         while(ctx.measureText(ccStr+'...').width>maxTextW&&ccStr.length>0) ccStr=ccStr.slice(0,-1);
         ccStr=ccStr+'...';
@@ -1286,55 +1523,19 @@ function drawInfoCard(n){
     ctx.textBaseline='top';
     ctx.fillText(i18n[lang].infoCard.budHint, cx+14, cy+120);
   }
-}
 
-// ====== 加载态 / 空态 / 错误态 ======
-function drawLoadingOrError(){
-  ctx.fillStyle='#0d1117';
-  ctx.fillRect(0,0,W,H);
-
-  var cx=W/2, cy=H/2;
-
-  if(loadingState==='loading'){
-    // Loading spinner
-    var spinnerR=20, spinnerSpeed=0.08;
-    var angle=now*spinnerSpeed;
-    ctx.strokeStyle='#58a6ff';
-    ctx.lineWidth=3;
+  // 注入故障按钮（节点正常时）
+  if(realStatus==='done'){
+    var btnW=90,btnH=22,btnY=cy+158;
+    ctx.fillStyle='#f85149';
     ctx.beginPath();
-    ctx.arc(cx,cy-20,spinnerR,angle,angle+Math.PI*1.5);
-    ctx.stroke();
-    ctx.fillStyle='#e6edf3';
-    ctx.font='14px -apple-system,PingFang SC,sans-serif';
+    ctx.roundRect(cx+14,btnY,btnW,btnH,4);
+    ctx.fill();
+    ctx.fillStyle='#fff';
+    ctx.font='bold 11px sans-serif';
     ctx.textAlign='center';
     ctx.textBaseline='middle';
-    ctx.fillText(i18n[lang].loading||'Loading...',cx,cy+30);
-  }
-  else if(loadingState==='empty'){
-    ctx.fillStyle='#8b949e';
-    ctx.font='48px sans-serif';
-    ctx.textAlign='center';
-    ctx.textBaseline='middle';
-    ctx.fillText('🌱',cx,cy-30);
-    ctx.fillStyle='#e6edf3';
-    ctx.font='bold 16px -apple-system,PingFang SC,sans-serif';
-    ctx.fillText(i18n[lang].empty||'No tasks loaded',cx,cy+20);
-    ctx.fillStyle='#8b949e';
-    ctx.font='13px sans-serif';
-    ctx.fillText(i18n[lang].emptyHint||'Send FUSANG_UPDATE_NODES to load data',cx,cy+45);
-  }
-  else if(loadingState==='error'){
-    ctx.fillStyle='#f85149';
-    ctx.font='48px sans-serif';
-    ctx.textAlign='center';
-    ctx.textBaseline='middle';
-    ctx.fillText('⚠️',cx,cy-30);
-    ctx.fillStyle='#f85149';
-    ctx.font='bold 16px -apple-system,PingFang SC,sans-serif';
-    ctx.fillText(i18n[lang].error||'Failed to load data',cx,cy+20);
-    ctx.fillStyle='#8b949e';
-    ctx.font='13px sans-serif';
-    ctx.fillText(i18n[lang].errorHint||'Check tasks.json or send FUSANG_UPDATE_NODES',cx,cy+45);
+    ctx.fillText(i18n[lang].infoCard.injectFault, cx+14+btnW/2, btnY+btnH/2);
   }
 }
 
@@ -1416,7 +1617,7 @@ function hitLegendToggle(mx,my){
 function hitBud(mx,my){
   for(var i=layoutNodes.length-1;i>=0;i--){
     var n=layoutNodes[i];
-    var realStatus=taskById(n.id)?taskById(n.id).status:n.status;
+    var realStatus=getEffectiveStatus(n.id);
     if(realStatus==='waiting'&&!budTransitions.find(function(t){return t.id===n.id;})){
       var budY=n.y-NH/2-22;
       var dx=mx-n.x, dy=my-budY;
@@ -1440,12 +1641,14 @@ cv.addEventListener('click',function(e){
 
   // 图例切换
   if(hitLegendToggle(mx,my)){
+    currentMode=null; // 用户交互 → 暂停 demo
     legendExpanded=!legendExpanded;
     return;
   }
 
   // 底座 → 切换树根
   if(hitPedestal(mx,my)){
+    currentMode=null; // 用户交互 → 暂停 demo
     rootsExpanded=!rootsExpanded;
     return;
   }
@@ -1453,74 +1656,98 @@ cv.addEventListener('click',function(e){
   // 花苞 → 激活转场
   var bud=hitBud(mx,my);
   if(bud){
+    currentMode=null; // 用户交互 → 暂停 demo
     budTransitions.push({id:bud.id,startTime:now,duration:800});
     selectedNode=bud;
     return;
   }
 
-  // 先更新 selectedNode（必须在按钮检测之前）
-  var clickedNode=hitTest(mx,my);
-  if(clickedNode){
-    selectedNode=clickedNode;
-  }
-
-  // 信息卡片按钮检测（AI修复 / 人工修复）— 必须在 selectedNode 更新之后
-  if(selectedNode&&selectedNode.status==='blocked'&&selectedNode.error){
+  // 注入故障按钮检测
+  if(selectedNode&&getEffectiveStatus(selectedNode.id)==='done'){
     var bcy=20+158,bcx=W-285;
     if(mx>=bcx+14&&mx<=bcx+104&&my>=bcy&&my<=bcy+22){
+      currentMode=null;
+      injectFault(selectedNode.id);return;
+    }
+  }
+
+  // 信息卡片按钮检测（AI修复 / 人工修复）
+  var selTask=selectedNode?taskById(selectedNode.id):null;
+  if(selTask&&selTask.status==='blocked'&&selTask.error){
+    var bcy=20+158,bcx=W-285;
+    if(mx>=bcx+14&&mx<=bcx+104&&my>=bcy&&my<=bcy+22){
+      currentMode=null; // 用户交互 → 暂停 demo
       startFixAnimation(selectedNode.id,'ai');return;
     }
     if(mx>=bcx+110&&mx<=bcx+200&&my>=bcy&&my<=bcy+22){
+      currentMode=null; // 用户交互 → 暂停 demo
       startFixAnimation(selectedNode.id,'manual');return;
     }
   }
 
-  // 如果没点到按钮，且点到了其他节点，selectedNode 已在上面更新
-  // 如果点到空白处，清除 selectedNode
-  if(!clickedNode){
-    selectedNode=null;
-  }
-  // postMessage: notify host to jump to code line (if node has file)
-  if(selectedNode&&selectedNode.file){
-    var jumpLine=(selectedNode.error&&selectedNode.error.line)||selectedNode.line||1;
-    window.parent.postMessage({type:'FUSANG_JUMP_TO_CODE',file:selectedNode.file,line:jumpLine,nodeId:selectedNode.id},'*');
-  }
+  currentMode=null; // 用户交互 → 暂停 demo
+  selectedNode=hitTest(mx,my);
 });
 
 window.addEventListener('resize',resize);
 
 window.addEventListener('message',function(e){
-  // V4 postMessage handler: Host → Fusang
-  // Supported messages:
-  //   FUSANG_UPDATE_NODES     : {tasks: [...]}  — replace all nodes
-  //   FUSANG_AI_FIX_RESULT   : {nodeId, success, fixedCode?, error?} — AI fix result
-  var d=e.data;
-  if(!d||!d.type) return;
-  if(d.type==='FUSANG_UPDATE_NODES'){
-    if(Array.isArray(d.tasks)) {
-      tasks=d.tasks;
-      layout();
-      requestAnimationFrame(draw);
-      console.log('[Fusang] Nodes updated via postMessage:',d.tasks.length);
-    } else {
-      console.warn('[Fusang] FUSANG_UPDATE_NODES: tasks is not an array',d.tasks);
-    }
-  } else if(d.type==='FUSANG_AI_FIX_RESULT'){
-    var t=taskById(d.nodeId);
-    if(t){
-      t.status=d.success?'done':'blocked';
-      if(d.success) { t.error=null; }
-      layout();
-      requestAnimationFrame(draw);
-      console.log('[Fusang] AI fix result:',d.nodeId,d.success);
-    }
-  } else {
-    console.log('[Fusang] Unknown postMessage type:',d.type);
-  }
+  // V4: handle FUSANG_UPDATE_NODES, FUSANG_AI_FIX_RESULT
+  console.log('[Fusang] postMessage received:', e.data);
 });
+
+
+// ====== 模式切换 ======
+function setMode(mode){
+  currentMode=mode;
+  modeStep=0;
+  modeStartTime=now;
+  selectedNode=null;
+  rootsExpanded=false;
+  ['btn-auto','btn-interactive','btn-real'].forEach(function(id){
+    var b=document.getElementById(id);
+    if(b) b.style.borderColor=id==='btn-'+mode?'#58a6ff':'transparent';
+  });
+  if(mode==='auto'){
+    resetToAllGreen();
+  } else if(mode==='interactive'){
+    resetToAllGreen();
+    document.getElementById('btn-inject').style.display='inline-block';
+  } else if(mode==='real'){
+    alert('真实场景接入功能即将推出，敬请期待！');
+    currentMode=null;
+    document.getElementById('btn-inject').style.display='none';
+  }
+}
+
+function resetToAllGreen(){
+  tasks.forEach(function(t){t.status='done';t.error=null;});
+  recalcAll();
+}
+
+function injectRandomFault(){
+  var candidates=tasks.filter(function(t){return t.id!=='goal';});
+  var idx=Math.floor(Math.random()*candidates.length);
+  var t=candidates[idx];
+  t.status='blocked';
+  t.error={message:{zh:'随机注入故障',en:'Random fault injected'},file:t.file||'',line:1,callChain:[]};
+  if(currentMode==='interactive'){
+    document.getElementById('btn-inject').style.display='none';
+  }
+}
 
 resize();
 fetchTasks();
 </script>
+
+<!-- mode-selector 暂时隐藏，底层逻辑跑通后再启用
+<div id="mode-selector" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:20;display:flex;gap:12px;background:rgba(22,27,34,0.95);border:1px solid #30363d;border-radius:10px;padding:10px 16px;">
+  <button id="btn-auto" onclick="setMode('auto')" style="background:#58a6ff;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit;">🎬 自动演示</button>
+  <button id="btn-interactive" onclick="setMode('interactive')" style="background:#3fb950;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit;">🎮 交互体验</button>
+  <button id="btn-real" onclick="setMode('real')" style="background:#21262d;color:#8b949e;border:1px solid #30363d;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit;">🔗 接入真实场景</button>
+  <button id="btn-inject" onclick="injectRandomFault()" style="background:#f85149;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit;display:none;">⚡ 注入随机故障</button>
+</div>
+-->
+
 </body>
 </html>
