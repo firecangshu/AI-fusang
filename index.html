@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>AI-Fusang V3</title>
+<title>AI—FUSANG v1.1</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden;background:#0d1117;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif}
@@ -13,9 +13,9 @@ canvas{display:block}
 <body>
 <canvas id="c"></canvas>
 <!-- 左上：语言切换（标题下方） -->
-<div id="top-lang" style="position:fixed;top:28px;left:12px;z-index:10;display:flex;gap:2px;">
-    <button id="btn-zh" onclick="setLang('zh')" style="background:rgba(33,38,45,0.92);color:#58a6ff;border:1px solid #58a6ff;border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer;">中文</button>
-    <button id="btn-en" onclick="setLang('en')" style="background:rgba(33,38,45,0.92);color:#8b949e;border:1px solid #30363d;border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer;">EN</button>
+<div id="top-lang" style="position:fixed;top:42px;left:12px;z-index:10;display:flex;gap:2px;">
+    <button id="btn-zh" onclick="setLang('zh')" style="background:rgba(33,38,45,0.92);color:#58a6ff;border:1px solid #58a6ff;border-radius:4px;padding:2px 7px;font-size:9px;cursor:pointer;">中文</button>
+    <button id="btn-en" onclick="setLang('en')" style="background:rgba(33,38,45,0.92);color:#8b949e;border:1px solid #30363d;border-radius:4px;padding:2px 7px;font-size:9px;cursor:pointer;">EN</button>
   </div>
 </div>
 
@@ -297,6 +297,8 @@ var edges=[
 // ====== 常量 ======
 var SC={done:'#3fb950','in-progress':'#58a6ff',todo:'#6e7681',blocked:'#f85149',waiting:'#bc8cff'};
 // SL removed - unused, status labels now in i18n
+var APP_VERSION='v1.1'; // 随系统升级手动更新
+document.title='AI\u2014FUSANG '+APP_VERSION;
 var NW=120,NH=40,PAD_X=120,PAD_TOP=50,LGAP=82,PED_H=65;
 var treeScale=0.95, treeOffsetX=0, treeOffsetY=0; // 树整体缩放和偏移（打包用）
 
@@ -346,7 +348,7 @@ var currentMode=null,modeStep=0,modeStartTime=0;
 // ====== i18n 双语 ======
 var i18n={
   zh:{
-    title:'AI-Fusang · 扶桑逻辑通天树',
+    title:'神秘的东方世界之树',
     status:{done:'已完成','in-progress':'进行中',todo:'待办',blocked:'阻塞',waiting:'等待中'},
     pedestal:'🏞️ 运行环境 Runtime',
     roots:{expanded:'🔑 配置 ▲',collapsed:'🔑 配置 ▼'},
@@ -377,7 +379,7 @@ var i18n={
     ]
   },
   en:{
-    title:'AI-Fusang · Logic Tree of Code',
+    title:'Mysterious Eastern World Tree',
     status:{done:'Done','in-progress':'In Progress',todo:'Todo',blocked:'Blocked',waiting:'Waiting'},
     pedestal:'🏞️ Runtime Environment',
     roots:{expanded:'🔑 Config ▲',collapsed:'🔑 Config ▼'},
@@ -522,12 +524,16 @@ function draw(timestamp){
   // 7. 图例
   drawLegend();
 
-  // 8. 标题
-  ctx.fillStyle='#8b949e';
-  ctx.font='11px sans-serif';
+  // 8. 标题（动态版本号，大气排版）
+  ctx.fillStyle='#c9d1d9';
+  ctx.font='bold 12px -apple-system,PingFang SC,sans-serif';
   ctx.textAlign='left';
   ctx.textBaseline='top';
-  ctx.fillText(i18n[lang].title, 12, 10);
+  var titleLine1='AI\u2014FUSANG '+APP_VERSION;
+  var titleLine2=i18n[lang].title;
+  ctx.fillText(titleLine1, 12, 8);
+  ctx.font='11px -apple-system,PingFang SC,sans-serif';
+  ctx.fillText(titleLine2, 12, 26);
 
   // 清理过期动画
   cleanupAnimations();
