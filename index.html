@@ -298,6 +298,7 @@ var edges=[
 var SC={done:'#3fb950','in-progress':'#58a6ff',todo:'#6e7681',blocked:'#f85149',waiting:'#bc8cff'};
 // SL removed - unused, status labels now in i18n
 var NW=120,NH=40,PAD_X=120,PAD_TOP=50,LGAP=82,PED_H=65;
+var treeScale=0.95, treeOffsetX=0, treeOffsetY=0; // 树整体缩放和偏移（打包用）
 
 // ====== Canvas 初始化 ======
 var cv=document.getElementById('c');
@@ -451,6 +452,9 @@ function easeInOut(t){return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;}
 // ====== 绘制主循环 ======
 function draw(timestamp){
   now=timestamp||0;
+  // 动态计算 treeOffsetY：让底座底部碰到🐛按钮顶部
+  // 公式推导：缩放后底座底部 = treeOffsetY + H * treeScale → 目标 = H - 36
+  treeOffsetY = H * (1 - treeScale) - 8;
 
   // 模式状态机
   if(currentMode==='auto'){
@@ -478,6 +482,9 @@ function draw(timestamp){
   }
 
   ctx.clearRect(0,0,W,H);
+  ctx.save();
+  ctx.translate(treeOffsetX, treeOffsetY);
+  ctx.scale(treeScale, treeScale);
 
   // 0. 底座
   drawPedestal();
@@ -507,6 +514,7 @@ function draw(timestamp){
 
   // 5. 树顶皇冠
   drawCrown();
+  ctx.restore();
 
   // 6. 信息卡片
   if(selectedNode) drawInfoCard(selectedNode);
@@ -1579,7 +1587,7 @@ function drawLegend(){
   if(!legendExpanded) return;
 
   // 展开面板 - wider to fit 3 columns: icon | label | desc
-  var panelW=290, panelH=i18n[lang].legendItems.length*28+18;
+  var panelW=230, panelH=i18n[lang].legendItems.length*22+16;
   var px=lx, py=ly-panelH;
 
   ctx.fillStyle='rgba(22,27,34,0.95)';
@@ -1595,23 +1603,23 @@ function drawLegend(){
   ctx.font='bold 11px -apple-system,PingFang SC,sans-serif';
   ctx.textAlign='left';
   ctx.textBaseline='top';
-  ctx.fillText(i18n[lang].legendTitle, px+12, py+7);
+  ctx.fillText(i18n[lang].legendTitle, px+10, py+5);
 
   i18n[lang].legendItems.forEach(function(item,i){
-    var iy=py+28+i*28;
+    var iy=py+20+i*22;
     // icon (2-char emoji ≈ 16px)
     ctx.font='13px sans-serif';
     ctx.textAlign='left';
     ctx.textBaseline='middle';
-    ctx.fillText(item.icon,px+14,iy+8);
+    ctx.fillText(item.icon,px+12,iy+11);
     // label (fixed width column)
     ctx.fillStyle='#d4a72c';
     ctx.font='bold 11px -apple-system,PingFang SC,sans-serif';
-    ctx.fillText(item.label,px+38,iy+8);
+    ctx.fillText(item.label,px+36,iy+11);
     // desc (after label column)
     ctx.fillStyle='#8b949e';
     ctx.font='10px sans-serif';
-    ctx.fillText(item.desc,px+100,iy+8);
+    ctx.fillText(item.desc,px+96,iy+11);
   });
 }
 
@@ -1625,7 +1633,7 @@ function hitTest(mx,my){
 }
 
 function hitPedestal(mx,my){
-  var baseY=H-PED_H;
+  var baseY=H-PED_H*treeScale;  // 底座顶部y（考虑缩放）
   var cx=W/2, mW=Math.min(400,W*0.5);
   return mx>=cx-mW*0.6&&mx<=cx+mW*0.6&&my>=baseY-15&&my<=baseY+20;
 }
@@ -1652,14 +1660,18 @@ function hitBud(mx,my){
 cv.addEventListener('mousemove',function(e){
   var r=cv.getBoundingClientRect();
   var mx=e.clientX-r.left, my=e.clientY-r.top;
-  hoveredNode=hitTest(mx,my);
-  var bud=hitBud(mx,my);
+  // 反变换坐标到树的局部坐标系
+  var lx=(mx-treeOffsetX)/treeScale, ly=(my-treeOffsetY)/treeScale;
+  hoveredNode=hitTest(lx,ly);
+  var bud=hitBud(lx,ly);
   cv.style.cursor=hoveredNode||hitPedestal(mx,my)||hitLegendToggle(mx,my)||bud?'pointer':'default';
 });
 
 cv.addEventListener('click',function(e){
   var r=cv.getBoundingClientRect();
   var mx=e.clientX-r.left, my=e.clientY-r.top;
+  // 反变换坐标到树的局部坐标系（用于 hitPedestal, hitBud）
+  var lx=(mx-treeOffsetX)/treeScale, ly=(my-treeOffsetY)/treeScale;
 
   // 图例切换
   if(hitLegendToggle(mx,my)){
@@ -1676,7 +1688,7 @@ cv.addEventListener('click',function(e){
   }
 
   // 花苞 → 激活转场
-  var bud=hitBud(mx,my);
+  var bud=hitBud(lx,ly);
   if(bud){
     currentMode=null; // 用户交互 → 暂停 demo
     budTransitions.push({id:bud.id,startTime:now,duration:800});
