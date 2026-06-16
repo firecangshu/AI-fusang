@@ -358,8 +358,8 @@ var fixStarted=false;         // S1中修复是否已开始
 var fixStartTime=0;           // S1中故障注入时间戳
 var phase2aDone=false;        // S7修复完成后标记
 var phase2bDone=false;        // S9修复完成后标记
-var lastClickTime=0;          // 上次点击时间（调试模式超时检测）
-var currentMode=null;
+var lastClickTime=performance.now();          // 上次点击时间（调试模式超时检测）
+var currentMode='auto';
 var modeStep=0,modeStartTime=0; // 兼容旧代码
 // 演示模式视觉覆盖（不修改底层status）
 var demoDimOverlay=false;       // S0全暗覆盖
@@ -530,6 +530,7 @@ function easeInOut(t){return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;}
 // ====== 绘制主循环 ======
 function draw(timestamp){
   now=timestamp||0;
+  try{
   // 动态计算 treeOffsetY：让底座底部碰到🐛按钮顶部
   // 公式推导：缩放后底座底部 = treeOffsetY + H * treeScale → 目标 = H - 36
   treeOffsetY = H * (1 - treeScale) - 8;
@@ -696,10 +697,10 @@ function draw(timestamp){
         }
       }
     } else if(demoState===10){
-      // S10: 最终全绿庆祝（3秒）→ 回S0循环
+      // S10: 最终全绿庆祝（3秒）→ 退出演示，回到调试模式
       demoDimOverlay=false;
       if(elapsed>3000){
-        demoState=0;demoStartTime=now;
+        currentMode='interactive'; lastClickTime=now;
         resetToAllGreen();
       }
     }
@@ -759,13 +760,14 @@ function draw(timestamp){
   // 清理过期动画
   cleanupAnimations();
 
-  // 调试模式超时检测：3.5秒无点击 → 返回演示
+  // 调试模式超时检测：8秒无点击 → 返回演示
   if(currentMode==='interactive' && now - lastClickTime > 8000){
     hideNodeMenu(); // 超时前先关闭菜单
     setMode('auto');
   }
 
   requestAnimationFrame(draw);
+  }catch(err){ console.error('[draw] JS Error:', err.message, err.stack); }
 }
 
 // ====== 连线绘制 ======
@@ -1512,50 +1514,87 @@ function calcDragonPath(){
 
 function drawDragonBody(ctrlPts){
   if(ctrlPts.length<2) return;
-  // 有故障时龙身变红，无故障时黄绿色
   var hasBlocked=tasks.some(function(t){return t.status==='blocked';});
-  // 龙身主色
-  var mainColor=hasBlocked?'rgba(200,68,68,0.85)':'rgba(120,140,60,0.7)';
-  var brightColor=hasBlocked?'rgba(255,100,100,0.6)':'rgba(160,180,80,0.5)';
-  var scaleColor=hasBlocked?'#a33':'#3a4a2a';
-
-  // 龙身：粗线
-  ctx.strokeStyle=mainColor;
-  ctx.lineWidth=5;
-  ctx.lineCap='round';
-  ctx.lineJoin='round';
-  ctx.beginPath();
-  ctx.moveTo(ctrlPts[0].x,ctrlPts[0].y);
-  for(var i=1;i<ctrlPts.length;i++){
-    ctx.lineTo(ctrlPts[i].x,ctrlPts[i].y);
-  }
-  ctx.stroke();
-
-  // 龙身亮边
-  ctx.strokeStyle=brightColor;
-  ctx.lineWidth=2;
-  ctx.stroke();
-
-  // 鳞片：沿路径等距采样画小菱形
-  if(dragonPathPts.length<2) return;
-  var step=14;
-  for(var i=0;i<dragonPathPts.length;i+=step){
-    var pt=dragonPathPts[i];
-    var angle=0;
-    if(i>0&&i<dragonPathPts.length-1){
-      var dx=dragonPathPts[i+1].x-dragonPathPts[i-1].x;
-      var dy=dragonPathPts[i+1].y-dragonPathPts[i-1].y;
-      angle=Math.atan2(dy,dx);
-    }
-    var ss=3;
-    ctx.fillStyle=scaleColor;
+  if(hasBlocked){
+    // 故障时：纯金色闪烁（无红色）
+    var pulse=0.3+0.7*Math.abs(Math.sin(now/400));
+    // 龙身：金色粗线
+    ctx.strokeStyle='rgba(212,167,44,'+pulse+')';
+    ctx.lineWidth=5;
+    ctx.lineCap='round';
+    ctx.lineJoin='round';
     ctx.beginPath();
-    ctx.moveTo(pt.x+Math.cos(angle)*ss, pt.y+Math.sin(angle)*ss);
-    ctx.lineTo(pt.x+Math.cos(angle+Math.PI/2)*ss, pt.y+Math.sin(angle+Math.PI/2)*ss);
-    ctx.lineTo(pt.x+Math.cos(angle+Math.PI)*ss, pt.y+Math.sin(angle+Math.PI)*ss);
-    ctx.lineTo(pt.x+Math.cos(angle+3*Math.PI/2)*ss, pt.y+Math.sin(angle+3*Math.PI/2)*ss);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(ctrlPts[0].x,ctrlPts[0].y);
+    for(var i=1;i<ctrlPts.length;i++){
+      ctx.lineTo(ctrlPts[i].x,ctrlPts[i].y);
+    }
+    ctx.stroke();
+    // 金色亮边
+    ctx.strokeStyle='rgba(255,220,100,'+(pulse*0.7)+')';
+    ctx.lineWidth=2;
+    ctx.stroke();
+    // 鳞片：金色高光
+    if(dragonPathPts.length<2) return;
+    var step=14;
+    for(var i=0;i<dragonPathPts.length;i+=step){
+      var pt=dragonPathPts[i];
+      var angle=0;
+      if(i>0&&i<dragonPathPts.length-1){
+        var dx=dragonPathPts[i+1].x-dragonPathPts[i-1].x;
+        var dy=dragonPathPts[i+1].y-dragonPathPts[i-1].y;
+        angle=Math.atan2(dy,dx);
+      }
+      var ss=3;
+      ctx.fillStyle='#5a4a1a';
+      ctx.beginPath();
+      ctx.moveTo(pt.x+Math.cos(angle)*ss, pt.y+Math.sin(angle)*ss);
+      ctx.lineTo(pt.x+Math.cos(angle+Math.PI/2)*ss, pt.y+Math.sin(angle+Math.PI/2)*ss);
+      ctx.lineTo(pt.x+Math.cos(angle+Math.PI)*ss, pt.y+Math.sin(angle+Math.PI)*ss);
+      ctx.lineTo(pt.x+Math.cos(angle+3*Math.PI/2)*ss, pt.y+Math.sin(angle+3*Math.PI/2)*ss);
+      ctx.closePath();
+      ctx.fill();
+      // 金色闪烁点
+      ctx.fillStyle='rgba(255,220,100,'+(0.3+0.7*Math.abs(Math.sin(now/300+i*0.3)))+')';
+      ctx.beginPath();
+      ctx.arc(pt.x,pt.y,1.5,0,Math.PI*2);
+      ctx.fill();
+    }
+  } else {
+    // 无故障：原版黄绿色
+    ctx.strokeStyle='rgba(120,140,60,0.7)';
+    ctx.lineWidth=5;
+    ctx.lineCap='round';
+    ctx.lineJoin='round';
+    ctx.beginPath();
+    ctx.moveTo(ctrlPts[0].x,ctrlPts[0].y);
+    for(var i=1;i<ctrlPts.length;i++){
+      ctx.lineTo(ctrlPts[i].x,ctrlPts[i].y);
+    }
+    ctx.stroke();
+    ctx.strokeStyle='rgba(160,180,80,0.5)';
+    ctx.lineWidth=2;
+    ctx.stroke();
+    // 鳞片：沿路径等距采样画小菱形
+    if(dragonPathPts.length<2) return;
+    var step=14;
+    for(var i=0;i<dragonPathPts.length;i+=step){
+      var pt=dragonPathPts[i];
+      var angle=0;
+      if(i>0&&i<dragonPathPts.length-1){
+        var dx=dragonPathPts[i+1].x-dragonPathPts[i-1].x;
+        var dy=dragonPathPts[i+1].y-dragonPathPts[i-1].y;
+        angle=Math.atan2(dy,dx);
+      }
+      var ss=3;
+      ctx.fillStyle='#3a4a2a';
+      ctx.beginPath();
+      ctx.moveTo(pt.x+Math.cos(angle)*ss, pt.y+Math.sin(angle)*ss);
+      ctx.lineTo(pt.x+Math.cos(angle+Math.PI/2)*ss, pt.y+Math.sin(angle+Math.PI/2)*ss);
+      ctx.lineTo(pt.x+Math.cos(angle+Math.PI)*ss, pt.y+Math.sin(angle+Math.PI)*ss);
+      ctx.lineTo(pt.x+Math.cos(angle+3*Math.PI/2)*ss, pt.y+Math.sin(angle+3*Math.PI/2)*ss);
+      ctx.closePath();
+      ctx.fill();
+    }
   }
 }
 
@@ -1654,7 +1693,7 @@ function drawBlockedMarkers(){
     ctx.textBaseline='middle';
     ctx.fillText('↩', tn.x, tn.y+NH/2+14);
 
-    // 红色脉冲环
+    // 红色脉冲环（呼吸动画）
     var pulseAlpha=0.3+0.7*Math.abs(Math.sin(now/300));
     ctx.strokeStyle='rgba(248,81,73,'+pulseAlpha+')';
     ctx.lineWidth=2;
@@ -1984,6 +2023,7 @@ function setMode(mode){
   currentMode=mode;
   modeStep=0;
   modeStartTime=performance.now();
+  if(mode==='auto') demoState=0;
   selectedNode=null;
   rootsExpanded=false;
   // 模式按钮高亮
@@ -2069,7 +2109,7 @@ function menuInjectFault(){
   if(!menuNode){console.warn('[Fusang] menuNode is null!'); return;}
   injectFault(menuNode.id);
   hideNodeMenu();
-  selectedNode=null; // 注入故障后不选中节点，避免InfoCard遮挡
+  selectedNode=null;
 }
 
 function menuAiFix(){
