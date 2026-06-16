@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>AI—FUSANG v1.2</title>
+<title>AI—FUSANG v1.4</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden;background:#0d1117;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif}
@@ -293,7 +293,7 @@ var edges=[
 // ====== 常量 ======
 var SC={done:'#3fb950','in-progress':'#58a6ff',todo:'#6e7681',blocked:'#f85149',waiting:'#bc8cff'};
 // SL removed - unused, status labels now in i18n
-var APP_VERSION='v1.3'; // 随系统升级手动更新
+var APP_VERSION='v1.4'; // 随系统升级手动更新
 document.title='AI\u2014FUSANG '+APP_VERSION;
 var NW=120,NH=40,PAD_X=120,PAD_TOP=50,LGAP=82,PED_H=65;
 var treeScale=0.95, treeOffsetX=0, treeOffsetY=0; // 树整体缩放和偏移（打包用）
@@ -369,7 +369,7 @@ var demoLitSet={};              // S1/S4中已点亮的节点集合
 var i18n={
   zh:{
     title:'神秘的东方世界之树',
-    versionTitle:'AI—FUSANG v1.3',
+    versionTitle:'AI—FUSANG v1.4',
     status:{done:'已完成','in-progress':'进行中',todo:'待办',blocked:'阻塞',waiting:'等待中'},
     pedestal:'🏞️ 运行环境 Runtime',
     roots:{expanded:'🔑 配置 ▲',collapsed:'🔑 配置 ▼'},
@@ -411,7 +411,7 @@ var i18n={
   },
   en:{
     title:'Mysterious Eastern World Tree',
-    versionTitle:'AI—FUSANG v1.3',
+    versionTitle:'AI—FUSANG v1.4',
     status:{done:'Done','in-progress':'In Progress',todo:'Todo',blocked:'Blocked',waiting:'Waiting'},
     pedestal:'🏞️ Runtime Environment',
     roots:{expanded:'🔑 Config ▲',collapsed:'🔑 Config ▼'},
@@ -721,11 +721,11 @@ function draw(timestamp){
   // 1.2 边级逆流粒子
   drawEdgeParticles();
 
-  // 1.5 盘龙（在节点下方）
-  drawDragon();
-
   // 2. 节点
   drawNodes();
+
+  // 2.3 盘龙（在节点上层，不被遮挡）
+  drawDragon();
 
   // 2.5 修复庆祝动画（粒子/辉光在节点上层）
   drawFixAnimations();
@@ -1230,7 +1230,7 @@ function injectFault(nodeId){
   if(!task){console.warn('[Fusang] task not found for '+nodeId); return;}
   task.status='blocked';
   task.error={message:{zh:'注入故障：模拟错误',en:'Injected fault: simulated error'},file:task.file||'',line:1,callChain:[]};
-  recalcAll(); // 关键：重新计算所有节点状态（下游变紫）
+  recalcAll();
 }
 
 function startFixAnimation(nodeId,type){
@@ -1447,7 +1447,7 @@ function drawCrown(){
 }
 
 // ====== 盘龙：异常监控 Watchdog ======
-// 龙身路径：基于节点位置计算蜿蜒曲线控制点
+// 龙身路径：基于节点位置计算蜿蜒曲线控制点（一直显示，故障时变红脉冲）
 var dragonPathPts=[];  // [{x,y}, ...] 龙身路径采样点（用于粒子运动）
 
 function calcDragonPath(){
@@ -1512,8 +1512,15 @@ function calcDragonPath(){
 
 function drawDragonBody(ctrlPts){
   if(ctrlPts.length<2) return;
-  // 龙身：青铜色粗线
-  ctx.strokeStyle='#4a5a3a';
+  // 有故障时龙身变红，无故障时黄绿色
+  var hasBlocked=tasks.some(function(t){return t.status==='blocked';});
+  // 龙身主色
+  var mainColor=hasBlocked?'rgba(200,68,68,0.85)':'rgba(120,140,60,0.7)';
+  var brightColor=hasBlocked?'rgba(255,100,100,0.6)':'rgba(160,180,80,0.5)';
+  var scaleColor=hasBlocked?'#a33':'#3a4a2a';
+
+  // 龙身：粗线
+  ctx.strokeStyle=mainColor;
   ctx.lineWidth=5;
   ctx.lineCap='round';
   ctx.lineJoin='round';
@@ -1525,7 +1532,7 @@ function drawDragonBody(ctrlPts){
   ctx.stroke();
 
   // 龙身亮边
-  ctx.strokeStyle='#5a6a4a';
+  ctx.strokeStyle=brightColor;
   ctx.lineWidth=2;
   ctx.stroke();
 
@@ -1541,7 +1548,7 @@ function drawDragonBody(ctrlPts){
       angle=Math.atan2(dy,dx);
     }
     var ss=3;
-    ctx.fillStyle='#3a4a2a';
+    ctx.fillStyle=scaleColor;
     ctx.beginPath();
     ctx.moveTo(pt.x+Math.cos(angle)*ss, pt.y+Math.sin(angle)*ss);
     ctx.lineTo(pt.x+Math.cos(angle+Math.PI/2)*ss, pt.y+Math.sin(angle+Math.PI/2)*ss);
@@ -1594,7 +1601,6 @@ function drawDragonEye(){
 
 function drawDragonParticles(){
   // 沿龙身路径流动的监控光点
-  // dragonParticles: [{t, speed}] t∈[0,1] 路径参数
   var N=dragonPathPts.length;
   if(N<2) return;
 
@@ -1604,6 +1610,7 @@ function drawDragonParticles(){
     dragonParticles.push({t:0,speed:0.002+Math.random()*0.003});
   }
 
+  var hasBlocked=tasks.some(function(t){return t.status==='blocked';});
   dragonParticles.forEach(function(p){
     p.t+=p.speed;
     if(p.t>1) return;
@@ -1623,68 +1630,46 @@ function drawDragonParticles(){
     });
 
     var alpha=0.4+0.6*Math.sin(p.t*Math.PI);
-    ctx.fillStyle=nearBlocked?'rgba(255,68,68,'+alpha+')':'rgba(160,200,100,'+alpha+')';
+    var baseColor=nearBlocked||hasBlocked?
+      'rgba(255,68,68,'+alpha+')':
+      'rgba(160,200,100,'+alpha+')';
+    ctx.fillStyle=baseColor;
     ctx.beginPath();
-    ctx.arc(pt.x,pt.y,2,0,Math.PI*2);
+    ctx.arc(pt.x,pt.y,2.5,0,Math.PI*2);
     ctx.fill();
   });
 }
 
-function drawBlockedWarnings(){
-  // 阻塞节点：龙身对应位置红色警告脉冲
+function drawBlockedMarkers(){
+  // 阻塞节点：红色警告标记
   tasks.forEach(function(t){
     if(t.status!=='blocked') return;
     var tn=nodeById(t.id);
     if(!tn) return;
-    // 找龙身最接近该节点的点
-    var minDist=Infinity, bestIdx=-1;
-    dragonPathPts.forEach(function(pt,i){
-      var d=Math.hypot(pt.x-tn.x,pt.y-tn.y);
-      if(d<minDist){minDist=d;bestIdx=i;}
-    });
-    if(bestIdx<0) return;
 
-    // 警告脉冲动画
-    var warnStart=blockedWarnings.find(function(w){return w.nodeId===t.id;});
-    if(!warnStart){
-      blockedWarnings.push({nodeId:t.id,startTime:now});
-      warnStart=blockedWarnings[blockedWarnings.length-1];
-    }
-    var elapsed=now-warnStart.startTime;
-    var pulseAlpha=0.3+0.7*Math.abs(Math.sin(elapsed/300));
+    // 红色回旋箭头 ↩
+    ctx.fillStyle='#f85149';
+    ctx.font='16px sans-serif';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText('↩', tn.x, tn.y+NH/2+14);
 
-    // 红色光环
+    // 红色脉冲环
+    var pulseAlpha=0.3+0.7*Math.abs(Math.sin(now/300));
     ctx.strokeStyle='rgba(248,81,73,'+pulseAlpha+')';
     ctx.lineWidth=2;
     ctx.beginPath();
-    ctx.arc(dragonPathPts[bestIdx].x,dragonPathPts[bestIdx].y,12+pulseAlpha*6,0,Math.PI*2);
+    ctx.arc(tn.x,tn.y,16+pulseAlpha*6,0,Math.PI*2);
     ctx.stroke();
-
-    // 红色填充
-    ctx.fillStyle='rgba(248,81,73,'+(pulseAlpha*0.15)+')';
-    ctx.beginPath();
-    ctx.arc(dragonPathPts[bestIdx].x,dragonPathPts[bestIdx].y,12+pulseAlpha*6,0,Math.PI*2);
-    ctx.fill();
-
-    // 警告文字
-    ctx.fillStyle='rgba(248,81,73,'+pulseAlpha+')';
-    ctx.font='9px sans-serif';
-    ctx.textAlign='center';
-    ctx.textBaseline='middle';
-    ctx.fillText(i18n[lang].blockedLabel,dragonPathPts[bestIdx].x,dragonPathPts[bestIdx].y+20);
-  });
-  // 清理已不存在的阻塞警告
-  blockedWarnings=blockedWarnings.filter(function(w){
-    return tasks.some(function(t){return t.id===w.nodeId&&t.status==='blocked';});
   });
 }
 
 function drawDragon(){
-  var ctrlPts=calcDragonPath();
+  var ctrlPts=calcDragonPath(); // 始终计算（无故障也画）
   drawDragonBody(ctrlPts);
   drawDragonEye();
   drawDragonParticles();
-  drawBlockedWarnings();
+  drawBlockedMarkers();
 }
 
 // ====== 信息卡片（精简版：只展示状态+问题）======
