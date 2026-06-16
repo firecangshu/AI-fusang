@@ -267,8 +267,19 @@ function fetchTasks(){
     layout();
     requestAnimationFrame(draw);
   }).catch(function(e){
-    console.error('Failed to load tasks.json:',e);
-    tasks=[];
+    console.warn('[Fusang] tasks.json 加载失败，使用内置数据:',e);
+    tasks=[
+      {id:'entry',label:{zh:'程序入口',en:'Entry Point'},layer:0,status:'done',desc:{zh:'程序启动入口',en:'Program entry point'},myth:{zh:'主干起点',en:'Trunk Start'},file:'src/main.ts'},
+      {id:'config',label:{zh:'配置管理',en:'Config'},layer:1,status:'done',desc:{zh:'环境变量、配置文件加载',en:'Env vars, config loading'},myth:{zh:'树根·密钥',en:'Roots·Keys'},file:'src/config/index.ts'},
+      {id:'db',label:{zh:'数据库连接',en:'Database'},layer:2,status:'done',desc:{zh:'PostgreSQL 连接池管理',en:'PostgreSQL connection pool'},myth:{zh:'枝干',en:'Branch'},file:'src/db/connection.ts'},
+      {id:'cache',label:{zh:'缓存层',en:'Cache'},layer:2,status:'done',desc:{zh:'Redis 缓存服务',en:'Redis cache service'},myth:{zh:'枝干',en:'Branch'},file:'src/cache/redis.ts'},
+      {id:'api',label:{zh:'API 服务',en:'API Server'},layer:3,status:'done',desc:{zh:'REST API 路由和控制器',en:'REST API routes & controllers'},myth:{zh:'金乌·触发器',en:'Crow·Trigger'},file:'src/api/routes.ts'},
+      {id:'auth',label:{zh:'用户认证',en:'Auth'},layer:3,status:'done',desc:{zh:'JWT 认证中间件',en:'JWT auth middleware'},myth:{zh:'花苞',en:'Bud'},file:'src/auth/jwt.ts'},
+      {id:'frontend',label:{zh:'前端应用',en:'Frontend'},layer:4,status:'done',desc:{zh:'React + Vite 前端应用',en:'React+Vite frontend app'},myth:{zh:'枝干',en:'Branch'},file:'client/App.jsx'},
+      {id:'tests',label:{zh:'测试套件',en:'Tests'},layer:4,status:'done',desc:{zh:'Jest 单元测试和集成测试',en:'Jest unit & integration tests'},myth:{zh:'枝干',en:'Branch'},file:'test/**/*.test.js'},
+      {id:'ci',label:{zh:'CI/CD',en:'CI/CD'},layer:5,status:'done',desc:{zh:'GitHub Actions 自动化部署流水线',en:'GitHub Actions CI/CD pipeline'},myth:{zh:'盘龙·监控',en:'Dragon·Monitor'},file:'.github/workflows/ci.yml'},
+      {id:'goal',label:{zh:'项目完成',en:'Project Complete'},layer:6,status:'done',isGoal:true,desc:{zh:'生产环境部署',en:'Production deployment'},myth:{zh:'树顶·太阳',en:'Crown·Sun'},file:'deploy.sh'}
+    ];
     layout();
     requestAnimationFrame(draw);
   });
@@ -697,10 +708,10 @@ function draw(timestamp){
         }
       }
     } else if(demoState===10){
-      // S10: 最终全绿庆祝（3秒）→ 退出演示，回到调试模式
+      // S10: 最终全绿庆祝（3秒）→ 循环回S0（继续演示）
       demoDimOverlay=false;
       if(elapsed>3000){
-        currentMode='interactive'; lastClickTime=now;
+        demoState=0;demoStartTime=now;
         resetToAllGreen();
       }
     }
@@ -2004,6 +2015,35 @@ cv.addEventListener('click',function(e){
     currentMode=null; selectedNode=hit; return;
   }
 
+  // InfoCard 按钮点击检测
+  if(selectedNode){
+    var sn=selectedNode;
+    var sRealStatus=getEffectiveStatus(sn.id);
+    var sLiveTask=taskById(sn.id);
+    var sHasError=sRealStatus==='blocked'&&!!(sLiveTask&&sLiveTask.error);
+
+    if(currentMode!=='interactive'){
+      var infoCx=W-285, infoCy=20;
+
+      if(sHasError){
+        var btnW=90, btnH=22, btnY=infoCy+96;
+        if(mx>=infoCx+14&&mx<=infoCx+14+btnW&&my>=btnY&&my<=btnY+btnH){
+          menuNode=selectedNode; menuAiFix(); return;
+        }
+        if(mx>=infoCx+14+btnW+6&&mx<=infoCx+14+btnW+6+btnW&&my>=btnY&&my<=btnY+btnH){
+          menuNode=selectedNode; menuManualFix(); return;
+        }
+      }
+
+      if(sRealStatus==='done'){
+        var btnW2=90, btnH2=22, btnY2=infoCy+158;
+        if(mx>=infoCx+14&&mx<=infoCx+14+btnW2&&my>=btnY2&&my<=btnY2+btnH2){
+          menuNode=selectedNode; menuInjectFault(); return;
+        }
+      }
+    }
+  }
+
   // 点击空白区域
   if(currentMode==='auto'){setMode('interactive');lastClickTime=now;return;}
   if(currentMode==='interactive'){lastClickTime=now;hideNodeMenu();return;}
@@ -2108,8 +2148,37 @@ function hideNodeMenu(){
 function menuInjectFault(){
   if(!menuNode){console.warn('[Fusang] menuNode is null!'); return;}
   injectFault(menuNode.id);
-  hideNodeMenu();
+  // 暂停演示状态机，切换到调试模式
+  demoState=-1;
+  demoDimOverlay=false;
+  demoLitSet={};
+  currentMode='interactive';
+  modeStep=0;
+  modeStartTime=performance.now();
   selectedNode=null;
+  rootsExpanded=false;
+  // 更新UI：模式按钮高亮 + 边框
+  ['btn-auto','btn-interactive','btn-real'].forEach(function(id){
+    var b=document.getElementById(id);
+    if(b){
+      if(id==='btn-interactive'){
+        b.style.color='#0d1117';
+        b.style.background='linear-gradient(135deg,#58a6ff,#3b82f6)';
+        b.style.fontWeight='bold';
+        b.style.boxShadow='0 0 8px rgba(88,166,255,0.5)';
+      } else {
+        b.style.color='#8b949e';
+        b.style.background='transparent';
+        b.style.fontWeight='normal';
+        b.style.boxShadow='none';
+      }
+    }
+  });
+  document.body.classList.add('mode-interactive');
+  document.body.classList.remove('mode-auto');
+  var ib=document.getElementById('injectionBar');
+  if(ib) ib.classList.remove('visible');
+  hideNodeMenu();
 }
 
 function menuAiFix(){
