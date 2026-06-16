@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>AI—FUSANG v1.1</title>
+<title>AI—FUSANG v1.2</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden;background:#0d1117;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif}
@@ -20,16 +20,14 @@ canvas{display:block}
 </div>
 
 <!-- 右上：模式按钮 -->
-<div id="top-modes" style="position:fixed;top:10px;right:12px;z-index:10;display:flex;gap:1px;align-items:center;background:rgba(22,27,34,0.92);border:1px solid #30363d;border-radius:5px;padding:2px;">
-  <button id="btn-auto" onclick="setMode('auto')" style="background:transparent;color:#e6edf3;border:2px solid transparent;border-radius:3px;padding:2px 6px;font-size:11px;cursor:pointer;">🎬 演示</button>
-  <button id="btn-interactive" onclick="setMode('interactive')" style="background:transparent;color:#e6edf3;border:2px solid transparent;border-radius:3px;padding:2px 6px;font-size:11px;cursor:pointer;">🎮 调试</button>
-  <button id="btn-real" onclick="setMode('real')" style="background:transparent;color:#484f58;border:2px solid transparent;border-radius:3px;padding:2px 6px;font-size:11px;cursor:pointer;opacity:0.45;">🔗 接入</button>
+<div id="top-modes" style="position:fixed;top:10px;right:12px;z-index:9999;display:flex;gap:3px;align-items:center;background:rgba(22,27,34,0.98);border:1px solid #30363d;border-radius:6px;padding:3px 5px;box-shadow:0 2px 8px rgba(0,0,0,0.5);">
+  <button id="btn-auto" onclick="setMode('auto')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎬 演示</button>
+  <button id="btn-interactive" onclick="setMode('interactive')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎮 调试</button>
+  <button id="btn-real" onclick="setMode('real')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🔌 接入</button>
 </div>
 
-<!-- 调试模式：注入故障按钮 -->
-<div id="inject-bar" style="position:fixed;top:50px;right:12px;z-index:10;display:none;gap:6px;align-items:center;">
-  <button id="btn-inject" onclick="injectRandomFault()" style="background:rgba(248,81,73,0.92);color:#fff;border:1px solid #f85149;border-radius:4px;padding:4px 14px;font-size:12px;cursor:pointer;font-weight:500;">⚡ 注入故障</button>
-</div>
+<!-- 调试模式：节点操作弹出菜单 -->
+<div id="node-menu" style="position:fixed;z-index:100;display:none;min-width:140px;background:rgba(22,27,34,0.98);border:1px solid #30363d;border-radius:8px;padding:6px 0;box-shadow:0 8px 24px rgba(0,0,0,0.5);"></div>
 
 <!-- 右下角：调试按钮 -->
 <button id="btn-debug" onclick="toggleDebug()" style="position:fixed;bottom:12px;right:12px;z-index:10;background:rgba(33,38,45,0.92);color:#f0883e;border:1px solid #30363d;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;" title="Debug Console">🐛</button>
@@ -266,8 +264,6 @@ var tasks=[];  // loaded from tasks.json
 function fetchTasks(){
   fetch('tasks.json').then(function(r){return r.json();}).then(function(data){
     tasks=data.tasks||data;
-    console.log('[DEBUG] tasks loaded, count=', tasks.length);
-    tasks.forEach(function(t){console.log('[DEBUG]', t.id, 'status=', t.status, 'error=', t.error);});
     layout();
     requestAnimationFrame(draw);
   }).catch(function(e){
@@ -297,7 +293,7 @@ var edges=[
 // ====== 常量 ======
 var SC={done:'#3fb950','in-progress':'#58a6ff',todo:'#6e7681',blocked:'#f85149',waiting:'#bc8cff'};
 // SL removed - unused, status labels now in i18n
-var APP_VERSION='v1.1'; // 随系统升级手动更新
+var APP_VERSION='v1.3'; // 随系统升级手动更新
 document.title='AI\u2014FUSANG '+APP_VERSION;
 var NW=120,NH=40,PAD_X=120,PAD_TOP=50,LGAP=82,PED_H=65;
 var treeScale=0.95, treeOffsetX=0, treeOffsetY=0; // 树整体缩放和偏移（打包用）
@@ -319,7 +315,13 @@ function setLang(l){
   lang=l;
   localStorage.setItem('fusang-lang',l);
   updateLangButtons();
-  document.title=i18n[l].title;
+  document.title=i18n[l].versionTitle;
+  // 更新模式按钮文本
+  var modes=['auto','interactive','real'];
+  modes.forEach(function(m){
+    var btn=document.getElementById('btn-'+m);
+    if(btn) btn.innerText=i18n[l].modeLabels[m];
+  });
 }
 function updateLangButtons(){
   var bZh=document.getElementById('btn-zh'), bEn=document.getElementById('btn-en');
@@ -343,12 +345,31 @@ var dragonParticles=[];  // {t, speed} t∈[0,1] 沿龙身路径参数
 var blockedWarnings=[];   // {nodeId, startTime} 阻塞节点警告
 var edgeParticles=[];    // {edge, t, speed} 边级逆流粒子
 var fixAnimations=[];    // {nodeId, startTime, phase:'flash'|'glow'|'particles'}
-var currentMode=null,modeStep=0,modeStartTime=0;
+// 演示模式状态机变量
+var demoState=0;             // S0-S10 状态
+var demoStartTime=0;         // 当前状态开始时间
+var executionOrder=[];        // 拓扑排序后的执行顺序
+var lightIndex=0;            // S1/S4中当前点亮位置
+var faultAt=-1;              // S1中故障出现位置（-1表示未出现）
+var repairQueue=[];           // S7/S9中待修复节点列表
+var repairIndex=0;            // S7/S9中当前修复位置
+var faultTriggered=false;     // S1中故障是否已触发
+var fixStarted=false;         // S1中修复是否已开始
+var fixStartTime=0;           // S1中故障注入时间戳
+var phase2aDone=false;        // S7修复完成后标记
+var phase2bDone=false;        // S9修复完成后标记
+var lastClickTime=0;          // 上次点击时间（调试模式超时检测）
+var currentMode=null;
+var modeStep=0,modeStartTime=0; // 兼容旧代码
+// 演示模式视觉覆盖（不修改底层status）
+var demoDimOverlay=false;       // S0全暗覆盖
+var demoLitSet={};              // S1/S4中已点亮的节点集合
 
 // ====== i18n 双语 ======
 var i18n={
   zh:{
     title:'神秘的东方世界之树',
+    versionTitle:'AI—FUSANG v1.3',
     status:{done:'已完成','in-progress':'进行中',todo:'待办',blocked:'阻塞',waiting:'等待中'},
     pedestal:'🏞️ 运行环境 Runtime',
     roots:{expanded:'🔑 配置 ▲',collapsed:'🔑 配置 ▼'},
@@ -367,6 +388,16 @@ var i18n={
       injectFault:'⚡ 注入故障'
     },
     legendTitle:'神树要件 × 程序概念',
+    legendBtn:'图例',
+    legendStatusTitle:'── 节点状态 ──',
+    legendStatus:[
+      {color:'#3fb950',label:'已完成'},
+      {color:'#58a6ff',label:'进行中'},
+      {color:'#6e7681',label:'待办'},
+      {color:'#f85149',label:'阻塞'},
+      {color:'#bc8cff',label:'等待中'}
+    ],
+    modeLabels:{auto:'🎬 演示',interactive:'🎮 调试',real:'🔌 接入'},
     legendItems:[
       {icon:'🏞️',label:'底座',desc:'运行环境 Runtime'},
       {icon:'🔑',label:'树根',desc:'配置文件/Env/Secrets'},
@@ -380,6 +411,7 @@ var i18n={
   },
   en:{
     title:'Mysterious Eastern World Tree',
+    versionTitle:'AI—FUSANG v1.3',
     status:{done:'Done','in-progress':'In Progress',todo:'Todo',blocked:'Blocked',waiting:'Waiting'},
     pedestal:'🏞️ Runtime Environment',
     roots:{expanded:'🔑 Config ▲',collapsed:'🔑 Config ▼'},
@@ -398,6 +430,16 @@ var i18n={
       injectFault:'⚡ Inject Fault'
     },
     legendTitle:'Sacred Tree × Program Concept',
+    legendBtn:'Legend',
+    legendStatusTitle:'── Node Status ──',
+    legendStatus:[
+      {color:'#3fb950',label:'Done'},
+      {color:'#58a6ff',label:'In Progress'},
+      {color:'#6e7681',label:'Todo'},
+      {color:'#f85149',label:'Blocked'},
+      {color:'#bc8cff',label:'Waiting'}
+    ],
+    modeLabels:{auto:'🎬 Demo',interactive:'🎮 Debug',real:'🔌 Live'},
     legendItems:[
       {icon:'🏞️',label:'Pedestal',desc:'Runtime Environment'},
       {icon:'🔑',label:'Roots',desc:'Config/Env/Secrets'},
@@ -412,7 +454,41 @@ var i18n={
 };
 
 // Now that i18n is defined, set document title
-document.title=i18n[lang].title;
+document.title=i18n[lang].versionTitle;
+
+// ====== 拓扑排序：获取执行顺序 ======
+function getExecutionOrder(){
+  var order=[];
+  var visited={};
+  var visiting={}; // 检测循环依赖
+  var hasCycle=false;
+
+  function visit(nodeId){
+    if(visiting[nodeId]){
+      console.error('[Fusang] 循环依赖检测：'+nodeId+' 正在访问中（存在环）');
+      hasCycle=true;
+      return;
+    }
+    if(visited[nodeId]) return;
+    visiting[nodeId]=true;
+    // 正向遍历：从当前节点出发，沿 from→to 方向访问下游
+    edges.filter(function(e){return e.from===nodeId;}).forEach(function(e){
+      visit(e.to);
+    });
+    visited[nodeId]=true;
+    delete visiting[nodeId];
+    order.push(nodeId);
+  }
+
+  // 从没有依赖的节点开始（根部）
+  var roots=tasks.filter(function(t){return !edges.find(function(e){return e.to===t.id;});});
+  roots.forEach(function(r){visit(r.id);});
+
+  if(hasCycle){
+    console.warn('[Fusang] 检测到循环依赖，执行顺序可能不正确');
+  }
+  return order;
+}
 
 function resize(){
   W=cv.width=window.innerWidth;
@@ -460,24 +536,170 @@ function draw(timestamp){
 
   // 模式状态机
   if(currentMode==='auto'){
-    var elapsed=now-modeStartTime;
-    if(modeStep===0){
-      // 全绿状态，等待2s后植入故障
-      if(elapsed>2000){
-        modeStep=1;modeStartTime=now;
-        injectRandomFault();
+    var elapsed=now-demoStartTime;
+    if(demoState===0){
+      // S0: 全灰视觉覆盖（1秒）—— 不改底层status，用覆盖层变暗
+      // 每帧都执行初始化（幂等操作，安全）
+      demoDimOverlay=true;
+      demoLitSet={};
+      faultTriggered=false;fixStarted=false;fixStartTime=0;
+      phase2aDone=false;phase2bDone=false;
+      if(elapsed>1000){
+        demoState=1;demoStartTime=now;lightIndex=-1;faultAt=-1;
+        // 计算执行顺序
+        executionOrder=getExecutionOrder();
+        executionOrder.reverse(); // 反转：从程序入口（底）→项目完成（顶）
+        // 随机选一个故障位置（包括首尾）
+        faultAt=Math.floor(Math.random()*executionOrder.length);
       }
-    } else if(modeStep===1){
-      // 红+紫显示中，等待3s后自动AI修复
+    } else if(demoState===1){
+      // S1: 逐步点亮（800ms/节点）—— 遇到故障→立刻修复→继续点亮→全部绿=完成
+      // 防御：确保 executionOrder 有效
+      if(!executionOrder||executionOrder.length===0){
+        console.warn('[Fusang Demo] S1: executionOrder 为空，重新计算');
+        executionOrder=getExecutionOrder();
+        if(!executionOrder||executionOrder.length===0){demoState=5;demoStartTime=now;}
+      }
+      var safeLen=Math.max(executionOrder.length,1);
+
+      // 子阶段 A：正常点亮（还没到故障位置）
+      if(!faultTriggered){
+        var targetLight=Math.min(Math.floor(elapsed/800), safeLen-1);
+        // 点亮范围不超过 faultAt（遇到故障就停）
+        var maxBeforeFault=(faultAt>=0)?Math.min(targetLight,faultAt-1):targetLight;
+        if(maxBeforeFault>lightIndex){
+          for(var i=lightIndex+1;i<=maxBeforeFault&&i<executionOrder.length;i++){
+            demoLitSet[executionOrder[i]]=true;
+          }
+          lightIndex=maxBeforeFault;
+        }
+        // 到达故障位置？
+        if(faultAt>=0&&lightIndex>=faultAt-1&&!faultTriggered){
+          // 点亮故障节点本身 + 注入红色
+          demoLitSet[executionOrder[faultAt]]=true;
+          var ft=taskById(executionOrder[faultAt]);
+          if(ft){ft.status='blocked';ft.error={message:{zh:'演示故障',en:'Demo fault'},file:'',line:1,callChain:[]};recalcAll();}
+          lightIndex=faultAt;
+          faultTriggered=true;
+          fixStartTime=now; // 记录故障注入时间
+          // 等待1秒让观众看到红灯，然后自动开始修复
+        }
+        // 无故障情况：全部点亮完直接完成
+        if(lightIndex>=safeLen-1&&(faultAt<0||faultAt>=safeLen)){
+          demoDimOverlay=false;
+          demoState=5;demoStartTime=now;
+        }
+      }
+
+      // 子阶段 B：等待1秒展示红灯，然后自动修复
+      if(faultTriggered&&!fixStarted){
+        if(now-fixStartTime>1000){ // 红灯展示1秒
+          var redN=tasks.find(function(t){return t.status==='blocked';});
+          if(redN){startFixAnimation(redN.id,'ai');fixStarted=true;}
+        }
+      }
+
+      // 子阶段 C：修复完成后继续点亮后续节点
+      if(fixStarted&&fixAnimations.length===0){
+        var postFixElapsed=now-(fixStartTime+1000+(fixStarted?2000:0));
+        var targetLight2=Math.min(Math.floor(postFixElapsed/800)+faultAt, safeLen-1);
+        if(targetLight2>lightIndex){
+          for(var i=lightIndex+1;i<=targetLight2&&i<executionOrder.length;i++){
+            demoLitSet[executionOrder[i]]=true;
+          }
+          lightIndex=targetLight2;
+        }
+        // 全部点亮完成！
+        if(lightIndex>=safeLen-1){
+          demoDimOverlay=false;
+          demoState=5;demoStartTime=now;
+        }
+      }
+    } else if(demoState===5){
+      // Phase 1 完成！全绿欣赏时间（3秒）
+      demoDimOverlay=false;
       if(elapsed>3000){
-        modeStep=2;modeStartTime=now;
-        var redNode=tasks.find(function(t){return t.status==='blocked';});
-        if(redNode) startFixAnimation(redNode.id,'ai');
+        demoState=6;demoStartTime=now;
+        // 随机1-2个节点变红（运行时单点故障）
+        var count=1+Math.floor(Math.random()*2); // 1-2
+        repairQueue=[];
+        for(var j=0;j<count;j++){
+          var candidates=tasks.filter(function(t){return t.id!=='goal'&&repairQueue.indexOf(t.id)===-1;});
+          if(candidates.length===0) break;
+          var idx=Math.floor(Math.random()*candidates.length);
+          var t=candidates[idx];
+          t.status='blocked';t.error={message:{zh:'运行时故障',en:'Runtime fault'},file:'',line:1,callChain:[]};
+          repairQueue.push(t.id);
+        }
       }
-    } else if(modeStep===2){
-      // 修复动画中，等待动画完成+2s后重置
-      if(fixAnimations.length===0&&elapsed>2000){
-        modeStep=0;modeStartTime=now;
+    } else if(demoState===6){
+      // S6: 单点故障展示（2秒让观众看清红点）
+      demoDimOverlay=false;
+      if(elapsed>2000){
+        demoState=7;demoStartTime=now;repairIndex=0;
+      }
+    } else if(demoState===7){
+      // S7: 逐个修复单点故障（每个修完后等一下）
+      if(repairIndex<repairQueue.length){
+        var rNodeId=repairQueue[repairIndex];
+        var rNode=taskById(rNodeId);
+        if(rNode&&rNode.status==='blocked'&&!fixAnimations.find(function(f){return f.nodeId===rNodeId;})){
+          startFixAnimation(rNodeId,'ai');
+          repairIndex++;
+        } else if(!rNode||rNode.status!=='blocked'){
+          repairIndex++;
+        }
+      }
+      // 所有都修完了 → 等2秒展示全绿
+      if(repairIndex>=repairQueue.length&&fixAnimations.length===0){
+        if(!phase2aDone) phase2aDone=true;
+        if(elapsed>2000||phase2aDone&&(elapsed>500)){ // 至少等2秒
+          demoState=8;demoStartTime=now;
+          phase2aDone=false;
+          // 随机3-5个节点变红（批量多点故障）
+          var count2=3+Math.floor(Math.random()*3); // 3-5
+          repairQueue=[];
+          for(var k=0;k<count2;k++){
+            var candidates2=tasks.filter(function(t){return t.id!=='goal'&&repairQueue.indexOf(t.id)===-1;});
+            if(candidates2.length===0) break;
+            var idx2=Math.floor(Math.random()*candidates2.length);
+            var t2=candidates2[idx2];
+            t2.status='blocked';t2.error={message:{zh:'批量故障',en:'Batch fault'},file:'',line:1,callChain:[]};
+            repairQueue.push(t2.id);
+          }
+        }
+      }
+    } else if(demoState===8){
+      // S8: 多点故障展示（2.5秒让观众看清多个红点）
+      demoDimOverlay=false;
+      if(elapsed>2500){
+        demoState=9;demoStartTime=now;repairIndex=0;
+      }
+    } else if(demoState===9){
+      // S9: 逐个修复多点故障
+      if(repairIndex<repairQueue.length){
+        var rNodeId2=repairQueue[repairIndex];
+        var rNode2=taskById(rNodeId2);
+        if(rNode2&&rNode2.status==='blocked'&&!fixAnimations.find(function(f){return f.nodeId===rNodeId2;})){
+          startFixAnimation(rNodeId2,'ai');
+          repairIndex++;
+        } else if(!rNode2||rNode2.status!=='blocked'){
+          repairIndex++;
+        }
+      }
+      // 所有都修完了 → 等3秒展示最终全绿
+      if(repairIndex>=repairQueue.length&&fixAnimations.length===0){
+        if(!phase2bDone) phase2bDone=true;
+        if(elapsed>3000||phase2bDone&&(elapsed>500)){
+          demoState=10;demoStartTime=now;
+          phase2bDone=false;
+        }
+      }
+    } else if(demoState===10){
+      // S10: 最终全绿庆祝（3秒）→ 回S0循环
+      demoDimOverlay=false;
+      if(elapsed>3000){
+        demoState=0;demoStartTime=now;
         resetToAllGreen();
       }
     }
@@ -529,14 +751,19 @@ function draw(timestamp){
   ctx.font='bold 12px -apple-system,PingFang SC,sans-serif';
   ctx.textAlign='left';
   ctx.textBaseline='top';
-  var titleLine1='AI\u2014FUSANG '+APP_VERSION;
-  var titleLine2=i18n[lang].title;
-  ctx.fillText(titleLine1, 12, 8);
+  var titleLine1=i18n[lang].versionTitle;
+  var titleLine2=i18n[lang].title;  ctx.fillText(titleLine1, 12, 8);
   ctx.font='11px -apple-system,PingFang SC,sans-serif';
   ctx.fillText(titleLine2, 12, 26);
 
   // 清理过期动画
   cleanupAnimations();
+
+  // 调试模式超时检测：3.5秒无点击 → 返回演示
+  if(currentMode==='interactive' && now - lastClickTime > 8000){
+    hideNodeMenu(); // 超时前先关闭菜单
+    setMode('auto');
+  }
 
   requestAnimationFrame(draw);
 }
@@ -713,6 +940,22 @@ function drawNodes(){
       ctx.textAlign='center';
       ctx.textBaseline='middle';
       ctx.fillText('!',n.x,n.y-NH/2-13);
+    }
+
+    // 演示模式覆盖层：未点亮的节点变暗
+    if(demoDimOverlay&&!demoLitSet[n.id]){
+      var ox=n.x-NW/2,oy=n.y-NH/2;
+      ctx.fillStyle='rgba(13,17,23,0.75)'; // 暗色覆盖
+      ctx.beginPath();
+      ctx.roundRect(ox,oy,NW,NH,8);
+      ctx.fill();
+      // 文字也覆盖暗化
+      ctx.fillStyle='rgba(110,118,129,0.9)';
+      ctx.font='11px -apple-system,PingFang SC,sans-serif';
+      ctx.textAlign='center';
+      ctx.textBaseline='middle';
+      var oLabel=n.label?n.label[lang]||n.label.zh||n.id:n.id;
+      ctx.fillText(oLabel,n.x,n.y);
     }
   });
 }
@@ -984,10 +1227,10 @@ function recalcAll(){
 
 function injectFault(nodeId){
   var task=taskById(nodeId);
-  if(!task) return;
+  if(!task){console.warn('[Fusang] task not found for '+nodeId); return;}
   task.status='blocked';
   task.error={message:{zh:'注入故障：模拟错误',en:'Injected fault: simulated error'},file:task.file||'',line:1,callChain:[]};
-  // 不需要动画，直接重绘
+  recalcAll(); // 关键：重新计算所有节点状态（下游变紫）
 }
 
 function startFixAnimation(nodeId,type){
@@ -1123,50 +1366,47 @@ function drawPedestal(){
     }
 }
 
-// ====== 树根（配置区） ======
+// ====== 树根（配置区）—— 紧凑横排 ======
 function drawRoots(){
   var cx=W/2, baseY=H-PED_H;
   var hasBlocked=tasks.some(function(t){return t.status==='blocked';});
-  var warnH=hasBlocked?22:0;
   var configs=[
-    {key:'ENV',val:'production',blocked:hasBlocked},
+    {key:'ENV',val:'production'},
     {key:'PORT',val:'3000'},
     {key:'DB',val:'PostgreSQL'},
     {key:'LOG',val:'stdout'}
   ];
-  var rW=180,rH=configs.length*22+16+warnH;
-  var rx=cx-rW/2, ry=baseY+22;
+  // 紧凑横排
+  var itemW=72, gap=4;
+  var rW=configs.length*itemW+(configs.length-1)*gap+12;
+  var rH=26;
+  var rx=cx-rW/2, ry=baseY+14;
 
   ctx.fillStyle='rgba(13,17,23,0.92)';
   ctx.beginPath();
-  ctx.roundRect(rx,ry,rW,rH,6);
+  ctx.roundRect(rx,ry,rW,rH,5);
   ctx.fill();
   ctx.strokeStyle='#30363d';
   ctx.lineWidth=1;
   ctx.stroke();
 
-  // 红色警告条
+  // 红色警告条（有故障时整行变红底）
   if(hasBlocked){
-    ctx.fillStyle='rgba(248,81,73,0.15)';
+    ctx.fillStyle='rgba(248,81,73,0.12)';
     ctx.beginPath();
-    ctx.roundRect(rx+4,ry+4,rW-8,warnH-4,4);
+    ctx.roundRect(rx,ry,rW,rH,5);
     ctx.fill();
-    ctx.fillStyle='#f85149';
-    ctx.font='bold 10px sans-serif';
-    ctx.textAlign='center';
-    ctx.textBaseline='middle';
-    ctx.fillText(i18n[lang].configWarning, cx, ry+warnH/2);
   }
 
+  // 横排显示：KEY=val 格式
   configs.forEach(function(c,i){
-    var cy=ry+12+warnH+i*22;
-    ctx.fillStyle=c.blocked?'#f85149':'#8b949e';
-    ctx.font='11px monospace';
+    var itemX=rx+6+i*(itemW+gap);
+    var cy=ry+rH/2;
+    ctx.fillStyle=hasBlocked?'#f85149':'#8b949e';
+    ctx.font='bold 9px monospace';
     ctx.textAlign='left';
     ctx.textBaseline='middle';
-    ctx.fillText(c.key+':',rx+12,cy);
-    ctx.fillStyle=c.blocked?'#f85149':'#e6edf3';
-    ctx.fillText(c.val,rx+60,cy);
+    ctx.fillText(c.key+'='+c.val,itemX,cy);
   });
 }
 
@@ -1447,13 +1687,13 @@ function drawDragon(){
   drawBlockedWarnings();
 }
 
-// ====== 信息卡片 ======
+// ====== 信息卡片（精简版：只展示状态+问题）======
 function drawInfoCard(n){
   var realStatus=getEffectiveStatus(n.id);
   var liveTask=taskById(n.id);
   var hasError=realStatus==='blocked'&&!!(liveTask&&liveTask.error);
-  var cx=W-285,cy=20,cw=270,ch=hasError?200:(realStatus==='done'?180:150);
-  var maxTextW=cw-28; // usable text width after padding
+  var cx=W-285,cy=20,cw=270,ch=hasError?130:60;
+  var maxTextW=cw-28;
 
   ctx.fillStyle='rgba(22,27,34,0.95)';
   ctx.beginPath();
@@ -1463,7 +1703,7 @@ function drawInfoCard(n){
   ctx.lineWidth=1;
   ctx.stroke();
 
-  // 标题（可能较长，截断）
+  // 标题
   ctx.fillStyle='#e6edf3';
   ctx.font='bold 14px -apple-system,PingFang SC,sans-serif';
   ctx.textAlign='left';
@@ -1477,78 +1717,51 @@ function drawInfoCard(n){
 
   // 状态
   ctx.fillStyle=SC[realStatus];
-  ctx.font='12px sans-serif';
+  ctx.font='bold 12px sans-serif';
   ctx.fillText(i18n[lang].status[realStatus],cx+14,cy+34);
 
-  // 层级
-  ctx.fillStyle='#8b949e';
-  ctx.fillText(i18n[lang].infoCard.layer+': '+n.layer, cx+14, cy+54);
-
-  // 神树意象
-  ctx.fillStyle='#d4a72c';
-  ctx.font='11px sans-serif';
-  ctx.fillText(i18n[lang].infoCard.myth+': '+n.myth[lang], cx+14, cy+74);
-
-  // 描述（自动换行或截断）
-  ctx.fillStyle='#c9d1d9';
-  ctx.font='11px -apple-system,PingFang SC,sans-serif';
-  var desc=n.desc[lang];
-  if(ctx.measureText(desc).width>maxTextW){
-    while(ctx.measureText(desc+'...').width>maxTextW&&desc.length>0) desc=desc.slice(0,-1);
-    desc=desc+'...';
-  }
-  ctx.fillText(desc,cx+14,cy+96);
-
-  // 堵点 + error 详情
+  // 错误详情（有故障时才展示）
   if(hasError){
-    // 错误信息（截断）
     ctx.fillStyle='#f85149';
     ctx.font='bold 11px sans-serif';
-    ctx.textAlign='left';
-    ctx.textBaseline='top';
     var errMsg=liveTask.error.message[lang];
-    if(ctx.measureText(i18n[lang].infoCard.error+': '+errMsg).width>maxTextW){
-      // try to fit just the message part
-      var prefix=i18n[lang].infoCard.error+': ';
-      var avail=maxTextW-ctx.measureText(prefix).width;
-      if(avail<40){ avail=maxTextW; prefix=''; }
-      if(ctx.measureText(errMsg).width>avail){
-        while(ctx.measureText(errMsg+'...').width>avail&&errMsg.length>0) errMsg=errMsg.slice(0,-1);
-        errMsg=errMsg+'...';
-      }
-      ctx.fillText(prefix+errMsg,cx+14,cy+116);
-    }else{
-      ctx.fillText(i18n[lang].infoCard.error+': '+liveTask.error.message[lang],cx+14,cy+116);
+    if(ctx.measureText(errMsg).width>maxTextW){
+      while(ctx.measureText(errMsg+'...').width>maxTextW&&errMsg.length>0) errMsg=errMsg.slice(0,-1);
+      errMsg=errMsg+'...';
     }
+    ctx.fillText(errMsg,cx+14,cy+54);
 
-    // 调用链（更小的字号，截断）
-    if(liveTask.error.callChain){
+    // 调用链
+    if(liveTask.error.callChain&&liveTask.error.callChain.length>0){
       ctx.fillStyle='#8b949e';
       ctx.font='9px monospace';
-      var ccStr=liveTask.error.callChain.join(' \u2192 ');
+      var ccStr=liveTask.error.callChain.join(' -> ');
       if(ctx.measureText(ccStr).width>maxTextW){
         while(ctx.measureText(ccStr+'...').width>maxTextW&&ccStr.length>0) ccStr=ccStr.slice(0,-1);
         ccStr=ccStr+'...';
       }
-      ctx.fillText(i18n[lang].infoCard.callChain+': '+ccStr,cx+14,cy+134);
+      ctx.fillText(ccStr,cx+14,cy+72);
     }
-    var btnW=90,btnH=22,btnY=cy+158;
-    ctx.fillStyle='#58a6ff';
-    ctx.beginPath();
-    ctx.roundRect(cx+14,btnY,btnW,btnH,4);
-    ctx.fill();
-    ctx.fillStyle='#fff';
-    ctx.font='bold 11px sans-serif';
-    ctx.textAlign='center';
-    ctx.textBaseline='middle';
-    ctx.fillText(i18n[lang].infoCard.aiFix, cx+14+btnW/2, btnY+btnH/2);
-    ctx.fillStyle='#6e7681';
-    ctx.beginPath();
-    ctx.roundRect(cx+14+btnW+6,btnY,btnW,btnH,4);
-    ctx.fill();
-    ctx.fillStyle='#e6edf3';
-    ctx.font='bold 11px sans-serif';
-    ctx.fillText(i18n[lang].infoCard.manualFix, cx+14+btnW+6+btnW/2, btnY+btnH/2);
+
+    // 操作按钮（非调试模式才画）
+    if(currentMode!=='interactive'){
+      var btnW=90,btnH=22,btnY=cy+96;
+      ctx.fillStyle='#58a6ff';
+      ctx.beginPath();
+      ctx.roundRect(cx+14,btnY,btnW,btnH,4);
+      ctx.fill();
+      ctx.fillStyle='#fff';
+      ctx.font='bold 11px sans-serif';
+      ctx.textAlign='center';
+      ctx.textBaseline='middle';
+      ctx.fillText(i18n[lang].infoCard.aiFix, cx+14+btnW/2, btnY+btnH/2);
+      ctx.fillStyle='#6e7681';
+      ctx.beginPath();
+      ctx.roundRect(cx+14+btnW+6,btnY,btnW,btnH,4);
+      ctx.fill();
+      ctx.fillStyle='#e6edf3';
+      ctx.fillText(i18n[lang].infoCard.manualFix, cx+14+btnW+6+btnW/2, btnY+btnH/2);
+    }
   }
 
   // 花苞节点提示
@@ -1560,8 +1773,8 @@ function drawInfoCard(n){
     ctx.fillText(i18n[lang].infoCard.budHint, cx+14, cy+120);
   }
 
-  // 注入故障按钮（节点正常时）
-  if(realStatus==='done'){
+  // 注入故障按钮（调试模式用弹出菜单替代）
+  if(realStatus==='done'&&currentMode!=='interactive'){
     var btnW=90,btnH=22,btnY=cy+158;
     ctx.fillStyle='#f85149';
     ctx.beginPath();
@@ -1577,28 +1790,36 @@ function drawInfoCard(n){
 
 // ====== 图例面板 ======
 function drawLegend(){
-  var lx=10, ly=H-40, lw=24, lh=24;
+  // 折叠按钮
+  var lbl=i18n[lang].legendBtn||'图例';
+  var lx=10, ly=H-34, lw=48, lh=20;
   ctx.fillStyle='rgba(22,27,34,0.9)';
   ctx.beginPath();
   ctx.roundRect(lx,ly,lw,lh,4);
   ctx.fill();
+  ctx.strokeStyle='#30363d';
   ctx.lineWidth=1;
   ctx.stroke();
   ctx.fillStyle='#8b949e';
-  ctx.font='12px sans-serif';
-  ctx.textAlign='center';
+  ctx.font='9px sans-serif';
+  ctx.textAlign='left';
   ctx.textBaseline='middle';
-  ctx.fillText(legendExpanded?'\u2716':'\u2630',lx+lw/2,ly+lh/2);
+  ctx.fillText(legendExpanded?'\u2716 '+lbl:'\u2630 '+lbl,lx+5,ly+lh/2);
 
   if(!legendExpanded) return;
 
-  // 展开面板 - wider to fit 3 columns: icon | label | desc
-  var panelW=230, panelH=i18n[lang].legendItems.length*22+16;
+  // 展开面板 — 超紧凑
+  var mainItems=i18n[lang].legendItems;
+  var statusItems=i18n[lang].legendStatus||[];
+  // 状态区只占1行（内联色块）
+  var totalRows=mainItems.length+(statusItems.length>0?2:0); // +1 sep +1 status-line
+  var ROW_H=16;
+  var panelW=220, panelH=totalRows*ROW_H+12;
   var px=lx, py=ly-panelH;
 
   ctx.fillStyle='rgba(22,27,34,0.95)';
   ctx.beginPath();
-  ctx.roundRect(px,py,panelW,panelH,8);
+  ctx.roundRect(px,py,panelW,panelH,6);
   ctx.fill();
   ctx.strokeStyle='#30363d';
   ctx.lineWidth=1;
@@ -1606,27 +1827,52 @@ function drawLegend(){
 
   // 标题
   ctx.fillStyle='#e6edf3';
-  ctx.font='bold 11px -apple-system,PingFang SC,sans-serif';
+  ctx.font='bold 9px -apple-system,PingFang SC,sans-serif';
   ctx.textAlign='left';
   ctx.textBaseline='top';
-  ctx.fillText(i18n[lang].legendTitle, px+10, py+5);
+  ctx.fillText(i18n[lang].legendTitle, px+6, py+3);
 
-  i18n[lang].legendItems.forEach(function(item,i){
-    var iy=py+20+i*22;
-    // icon (2-char emoji ≈ 16px)
-    ctx.font='13px sans-serif';
+  var row=0;
+  // 神树要件条目
+  mainItems.forEach(function(item,i){
+    var iy=py+13+row*ROW_H;
+    ctx.font='11px sans-serif';
     ctx.textAlign='left';
     ctx.textBaseline='middle';
-    ctx.fillText(item.icon,px+12,iy+11);
-    // label (fixed width column)
+    ctx.fillText(item.icon,px+6,iy+8);
     ctx.fillStyle='#d4a72c';
-    ctx.font='bold 11px -apple-system,PingFang SC,sans-serif';
-    ctx.fillText(item.label,px+36,iy+11);
-    // desc (after label column)
+    ctx.font='bold 9px -apple-system,PingFang SC,sans-serif';
+    ctx.fillText(item.label,px+24,iy+8);
     ctx.fillStyle='#8b949e';
-    ctx.font='10px sans-serif';
-    ctx.fillText(item.desc,px+96,iy+11);
+    ctx.font='8px sans-serif';
+    ctx.fillText(item.desc,px+72,iy+8);
+    row++;
   });
+
+  // 状态颜色 — 单行内联色块
+  if(statusItems.length>0){
+    row++;
+    var sepY=py+13+(row-1)*ROW_H+6;
+    ctx.strokeStyle='#30363d';
+    ctx.beginPath();ctx.moveTo(px+6,sepY);ctx.lineTo(px+panelW-6,sepY);ctx.stroke();
+    row++;
+    var sy=py+13+(row-1)*ROW_H+2;
+    // 内联绘制所有状态色块
+    var sx=px+6;
+    statusItems.forEach(function(item,idx){
+      // 色块 8x8
+      ctx.fillStyle=item.color;
+      ctx.beginPath();ctx.roundRect(sx,sy,8,8,2);ctx.fill();
+      // 缩写标签（取前4字符）
+      ctx.fillStyle='#c9d1d9';
+      ctx.font='8px sans-serif';
+      ctx.textAlign='left';ctx.textBaseline='middle';
+      var full=item.label;
+      var abbr=full.length>4?full.substring(0,4):full;
+      ctx.fillText(abbr,sx+11,sy+5);
+      sx+=ctx.measureText(abbr).width+18;
+    });
+  }
 }
 
 // ====== 交互：点击检测 ======
@@ -1645,7 +1891,7 @@ function hitPedestal(mx,my){
 }
 
 function hitLegendToggle(mx,my){
-  var lx=10, ly=H-40, lw=24, lh=24;
+  var lx=10, ly=H-34, lw=48, lh=20;
   return mx>=lx&&mx<=lx+lw&&my>=ly&&my<=ly+lh;
 }
 
@@ -1674,6 +1920,18 @@ cv.addEventListener('mousemove',function(e){
 });
 
 cv.addEventListener('click',function(e){
+  // ====== 兜底：检测模式按钮点击（防止Canvas遮挡按钮onclick）======
+  var modesBar=document.getElementById('top-modes');
+  if(modesBar){
+    var mbRect=modesBar.getBoundingClientRect();
+    if(e.clientX>=mbRect.left&&e.clientX<=mbRect.right&&e.clientY>=mbRect.top&&e.clientY<=mbRect.bottom){
+      // 点击在按钮区域内，让原生 onclick 处理，不拦截
+      return;
+    }
+  }
+
+  // 调试模式下，点击更新 lastClickTime（防止超时返回演示）
+  if(currentMode==='interactive') lastClickTime=now;
   var r=cv.getBoundingClientRect();
   var mx=e.clientX-r.left, my=e.clientY-r.top;
   // 反变换坐标到树的局部坐标系（用于 hitPedestal, hitBud）
@@ -1688,6 +1946,7 @@ cv.addEventListener('click',function(e){
 
   // 底座 → 切换树根
   if(hitPedestal(mx,my)){
+    if(currentMode==='auto'){setMode('interactive');lastClickTime=performance.now();return;}
     currentMode=null; // 用户交互 → 暂停 demo
     rootsExpanded=!rootsExpanded;
     return;
@@ -1696,52 +1955,46 @@ cv.addEventListener('click',function(e){
   // 花苞 → 激活转场
   var bud=hitBud(lx,ly);
   if(bud){
+    if(currentMode==='auto'){setMode('interactive');lastClickTime=performance.now();return;}
     currentMode=null; // 用户交互 → 暂停 demo
     budTransitions.push({id:bud.id,startTime:now,duration:800});
-    selectedNode=bud;
+    selectedNode=null; // 点花苞不显示InfoCard
     return;
   }
 
-  // 注入故障按钮检测
-  if(selectedNode&&getEffectiveStatus(selectedNode.id)==='done'){
-    var bcy=20+158,bcx=W-285;
-    if(mx>=bcx+14&&mx<=bcx+104&&my>=bcy&&my<=bcy+22){
-      currentMode=null;
-      injectFault(selectedNode.id);return;
+  // 节点点击 → 调试模式弹出菜单 / 其他模式选中
+  var hit=hitTest(lx,ly);
+  if(hit){
+    if(currentMode==='auto'){
+      setMode('interactive');lastClickTime=now;selectedNode=null;
+      showNodeMenu(hit, e.clientX, e.clientY);
+      e.stopPropagation(); // 阻止冒泡到document（否则菜单立即被关闭）
+      return;
     }
+    if(currentMode==='interactive'){
+      lastClickTime=now;hideNodeMenu();selectedNode=null;
+      showNodeMenu(hit, e.clientX, e.clientY);
+      e.stopPropagation(); // 阻止冒泡到document（否则菜单立即被关闭）
+      return;
+    }
+    currentMode=null; selectedNode=hit; return;
   }
 
-  // 信息卡片按钮检测（AI修复 / 人工修复）
-  var selTask=selectedNode?taskById(selectedNode.id):null;
-  if(selTask&&selTask.status==='blocked'&&selTask.error){
-    var bcy=20+158,bcx=W-285;
-    if(mx>=bcx+14&&mx<=bcx+104&&my>=bcy&&my<=bcy+22){
-      currentMode=null; // 用户交互 → 暂停 demo
-      startFixAnimation(selectedNode.id,'ai');return;
-    }
-    if(mx>=bcx+110&&mx<=bcx+200&&my>=bcy&&my<=bcy+22){
-      currentMode=null; // 用户交互 → 暂停 demo
-      startFixAnimation(selectedNode.id,'manual');return;
-    }
-  }
-
-  currentMode=null; // 用户交互 → 暂停 demo
-  selectedNode=hitTest(mx,my);
+  // 点击空白区域
+  if(currentMode==='auto'){setMode('interactive');lastClickTime=now;return;}
+  if(currentMode==='interactive'){lastClickTime=now;hideNodeMenu();return;}
+  currentMode=null; selectedNode=null;
 });
-
-window.addEventListener('resize',resize);
-
-window.addEventListener('message',function(e){
-  // V4: handle FUSANG_UPDATE_NODES, FUSANG_AI_FIX_RESULT
-  console.log('[Fusang] postMessage received:', e.data);
-});
-
 
 // ====== 模式切换 ======
 function setMode(mode){
   if(mode==='real'){
-    alert('真实场景接入功能即将推出！');
-    return;
+    demoState=-1;
+    demoDimOverlay=false;
+    demoLitSet={};
+    resetToAllGreen();
+    hideNodeMenu();
+    cv.style.border='none';
   }
   currentMode=mode;
   modeStep=0;
@@ -1749,30 +2002,111 @@ function setMode(mode){
   selectedNode=null;
   rootsExpanded=false;
   // 模式按钮高亮
-  ['btn-auto','btn-interactive'].forEach(function(id){
+  ['btn-auto','btn-interactive','btn-real'].forEach(function(id){
     var b=document.getElementById(id);
     if(b) {
       if(id==='btn-'+mode){
-        b.style.borderColor='#58a6ff';
-        b.style.background='rgba(88,166,255,0.15)';
-        b.style.color='#58a6ff';
+        b.style.color='#0d1117';
+        b.style.background='linear-gradient(135deg,#58a6ff,#3b82f6)';
+        b.style.fontWeight='bold';
+        b.style.boxShadow='0 0 8px rgba(88,166,255,0.5)';
       } else {
-        b.style.borderColor='transparent';
+        b.style.color='#8b949e';
         b.style.background='transparent';
-        b.style.color='#e6edf3';
+        b.style.fontWeight='normal';
+        b.style.boxShadow='none';
       }
     }
   });
   // 注入故障按钮显隐
   var injectBar=document.getElementById('inject-bar');
   if(mode==='auto'){
+    // 切入演示：清掉调试残留，从S0重新开始
+    demoState=0;demoStartTime=performance.now();
+    demoDimOverlay=false;demoLitSet={};
     resetToAllGreen();
-    if(injectBar) injectBar.style.display='none';
+    hideNodeMenu();
+    cv.style.border='none';
   } else if(mode==='interactive'){
+    // 调试优先：暂停演示状态机，全绿展示
+    demoDimOverlay=false;demoLitSet={};demoState=-1;
     resetToAllGreen();
-    if(injectBar) injectBar.style.display='flex';
+    hideNodeMenu();
+    cv.style.border='2px solid #58a6ff'; // 蓝色边框 = 调试模式
+    lastClickTime=performance.now(); // 重置超时计时器
+  } else {
+    cv.style.border='none';
   }
 }
+
+// ====== 节点操作弹出菜单 ======
+var menuNode=null; // 当前菜单对应的节点
+
+function showNodeMenu(node, screenX, screenY){
+  var menu=document.getElementById('node-menu');
+  if(!menu) return;
+  menuNode=node;
+  var task=taskById(node.id);
+  var status=getEffectiveStatus(node.id);
+
+  // 根据节点状态生成菜单项
+  var html='';
+  if(status!=='blocked'){
+    // 正常节点（绿/紫/灰）→ 显示注入故障
+    html+='<div onclick="menuInjectFault()" style="padding:8px 16px;cursor:pointer;font-size:12px;color:#f85149;display:flex;align-items:center;gap:6px;" onmouseover="this.style.background=\'rgba(248,81,73,0.1)\'" onmouseout="this.style.background=\'none\'">⚡ '+i18n[lang].infoCard.injectFault+'</div>';
+  }
+  if(status==='blocked'&&task&&task.error){
+    // 故障节点 → 显示修复选项
+    html+='<div onclick="menuAiFix()" style="padding:8px 16px;cursor:pointer;font-size:12px;color:#58a6ff;display:flex;align-items:center;gap:6px;" onmouseover="this.style.background=\'rgba(88,166,255,0.1)\'" onmouseout="this.style.background=\'none\'">🤖 AI '+i18n[lang].infoCard.aiFix+'</div>';
+    html+='<div onclick="menuManualFix()" style="padding:8px 16px;cursor:pointer;font-size:12px;color:#3fb950;display:flex;align-items:center;gap:6px;" onmouseover="this.style.background=\'rgba(63,179,80,0.1)\'" onmouseout="this.style.background=\'none\'">🔧 '+i18n[lang].infoCard.manualFix+'</div>';
+  }
+
+  menu.innerHTML=html;
+  menu.style.display='block';
+
+  // 定位：确保不超出屏幕
+  var mw=150, mh=html.split('</div>').length*34+12;
+  var mx=screenX+8, my=screenY+8;
+  if(mx+mw>window.innerWidth) mx=screenX-mw-8;
+  if(my+mh>window.innerHeight) my=screenY-mh-8;
+  menu.style.left=mx+'px';
+  menu.style.top=my+'px';
+}
+
+function hideNodeMenu(){
+  var menu=document.getElementById('node-menu');
+  if(menu){menu.style.display='none';}
+  menuNode=null;
+}
+
+// 菜单操作函数
+function menuInjectFault(){
+  if(!menuNode){console.warn('[Fusang] menuNode is null!'); return;}
+  injectFault(menuNode.id);
+  hideNodeMenu();
+  selectedNode=null; // 注入故障后不选中节点，避免InfoCard遮挡
+}
+
+function menuAiFix(){
+  if(!menuNode)return;
+  startFixAnimation(menuNode.id,'ai');
+  hideNodeMenu();
+}
+
+function menuManualFix(){
+  if(!menuNode)return;
+  startFixAnimation(menuNode.id,'manual');
+  hideNodeMenu();
+}
+
+// 点击页面其他地方关闭菜单
+document.addEventListener('click',function(e){
+  var menu=document.getElementById('node-menu');
+  if(menu&&menu.style.display!=='none'&&!menu.contains(e.target)){
+    hideNodeMenu();
+    lastClickTime=performance.now(); // 关闭菜单时重置超时计时器
+  }
+});
 
 function resetToAllGreen(){
   tasks.forEach(function(t){t.status='done';t.error=null;});
