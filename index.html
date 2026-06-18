@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>AI—FUSANG v1.4</title>
+<title>AI—FUSANG v1.5</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden;background:#0d1117;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif}
@@ -266,22 +269,34 @@ function fetchTasks(){
     tasks=data.tasks||data;
     layout();
     requestAnimationFrame(draw);
+    // 发送 READY 信号给父窗口
+    if(window.parent!==window){
+      parent.postMessage({type:'FUSANG_READY',secret:SECRET},'*');
+      parentReady=true; // 能发出消息说明父窗口存在且可通信
+      console.log('[Fusang] ✉️ 发送 FUSANG_READY (parentReady=true)');
+    }
   }).catch(function(e){
     console.warn('[Fusang] tasks.json 加载失败，使用内置数据:',e);
     tasks=[
-      {id:'entry',label:{zh:'程序入口',en:'Entry Point'},layer:0,status:'done',desc:{zh:'程序启动入口',en:'Program entry point'},myth:{zh:'主干起点',en:'Trunk Start'},file:'src/main.ts'},
-      {id:'config',label:{zh:'配置管理',en:'Config'},layer:1,status:'done',desc:{zh:'环境变量、配置文件加载',en:'Env vars, config loading'},myth:{zh:'树根·密钥',en:'Roots·Keys'},file:'src/config/index.ts'},
-      {id:'db',label:{zh:'数据库连接',en:'Database'},layer:2,status:'done',desc:{zh:'PostgreSQL 连接池管理',en:'PostgreSQL connection pool'},myth:{zh:'枝干',en:'Branch'},file:'src/db/connection.ts'},
-      {id:'cache',label:{zh:'缓存层',en:'Cache'},layer:2,status:'done',desc:{zh:'Redis 缓存服务',en:'Redis cache service'},myth:{zh:'枝干',en:'Branch'},file:'src/cache/redis.ts'},
-      {id:'api',label:{zh:'API 服务',en:'API Server'},layer:3,status:'done',desc:{zh:'REST API 路由和控制器',en:'REST API routes & controllers'},myth:{zh:'金乌·触发器',en:'Crow·Trigger'},file:'src/api/routes.ts'},
-      {id:'auth',label:{zh:'用户认证',en:'Auth'},layer:3,status:'done',desc:{zh:'JWT 认证中间件',en:'JWT auth middleware'},myth:{zh:'花苞',en:'Bud'},file:'src/auth/jwt.ts'},
-      {id:'frontend',label:{zh:'前端应用',en:'Frontend'},layer:4,status:'done',desc:{zh:'React + Vite 前端应用',en:'React+Vite frontend app'},myth:{zh:'枝干',en:'Branch'},file:'client/App.jsx'},
-      {id:'tests',label:{zh:'测试套件',en:'Tests'},layer:4,status:'done',desc:{zh:'Jest 单元测试和集成测试',en:'Jest unit & integration tests'},myth:{zh:'枝干',en:'Branch'},file:'test/**/*.test.js'},
-      {id:'ci',label:{zh:'CI/CD',en:'CI/CD'},layer:5,status:'done',desc:{zh:'GitHub Actions 自动化部署流水线',en:'GitHub Actions CI/CD pipeline'},myth:{zh:'盘龙·监控',en:'Dragon·Monitor'},file:'.github/workflows/ci.yml'},
-      {id:'goal',label:{zh:'项目完成',en:'Project Complete'},layer:6,status:'done',isGoal:true,desc:{zh:'生产环境部署',en:'Production deployment'},myth:{zh:'树顶·太阳',en:'Crown·Sun'},file:'deploy.sh'}
+      {id:'entry',label:{zh:'程序入口',en:'Entry Point'},layer:0,status:'done',desc:{zh:'程序启动入口',en:'Program entry point'},myth:{zh:'主干起点',en:'Trunk Start'},codeLocation:{file:'src/main.ts',line:10,column:1}},
+      {id:'config',label:{zh:'配置管理',en:'Config'},layer:1,status:'done',desc:{zh:'环境变量、配置文件加载',en:'Env vars, config loading'},myth:{zh:'树根·密钥',en:'Roots·Keys'},codeLocation:{file:'src/config/index.ts',line:25,column:1}},
+      {id:'db',label:{zh:'数据库连接',en:'Database'},layer:2,status:'done',desc:{zh:'PostgreSQL 连接池管理',en:'PostgreSQL connection pool'},myth:{zh:'枝干',en:'Branch'},codeLocation:{file:'src/db/connection.ts',line:42,column:1}},
+      {id:'cache',label:{zh:'缓存层',en:'Cache'},layer:2,status:'done',desc:{zh:'Redis 缓存服务',en:'Redis cache service'},myth:{zh:'枝干',en:'Branch'},codeLocation:{file:'src/cache/redis.ts',line:18,column:1}},
+      {id:'api',label:{zh:'API 服务',en:'API Server'},layer:3,status:'done',desc:{zh:'REST API 路由和控制器',en:'REST API routes & controllers'},myth:{zh:'金乌·触发器',en:'Crow·Trigger'},codeLocation:{file:'src/api/routes.ts',line:55,column:1}},
+      {id:'auth',label:{zh:'用户认证',en:'Auth'},layer:3,status:'done',desc:{zh:'JWT 认证中间件',en:'JWT auth middleware'},myth:{zh:'花苞',en:'Bud'},codeLocation:{file:'src/auth/jwt.ts',line:33,column:1}},
+      {id:'frontend',label:{zh:'前端应用',en:'Frontend'},layer:4,status:'done',desc:{zh:'React + Vite 前端应用',en:'React+Vite frontend app'},myth:{zh:'枝干',en:'Branch'},codeLocation:{file:'client/App.jsx',line:77,column:1}},
+      {id:'tests',label:{zh:'测试套件',en:'Tests'},layer:4,status:'done',desc:{zh:'Jest 单元测试和集成测试',en:'Jest unit & integration tests'},myth:{zh:'枝干',en:'Branch'},codeLocation:{file:'test/**/*.test.js',line:5,column:1}},
+      {id:'ci',label:{zh:'CI/CD',en:'CI/CD'},layer:5,status:'done',desc:{zh:'GitHub Actions 自动化部署流水线',en:'GitHub Actions CI/CD pipeline'},myth:{zh:'盘龙·监控',en:'Dragon·Monitor'},codeLocation:{file:'.github/workflows/ci.yml',line:12,column:1}},
+      {id:'goal',label:{zh:'项目完成',en:'Project Complete'},layer:6,status:'done',isGoal:true,desc:{zh:'生产环境部署',en:'Production deployment'},myth:{zh:'树顶·太阳',en:'Crown·Sun'},codeLocation:{file:'deploy.sh',line:1,column:1}}
     ];
     layout();
     requestAnimationFrame(draw);
+    // 发送 READY 信号给父窗口
+    if(window.parent!==window){
+      parent.postMessage({type:'FUSANG_READY',secret:SECRET},'*');
+      parentReady=true;
+      console.log('[Fusang] ✉️ 发送 FUSANG_READY (fallback data, parentReady=true)');
+    }
   });
 }
 var edges=[
@@ -304,16 +319,23 @@ var edges=[
 // ====== 常量 ======
 var SC={done:'#3fb950','in-progress':'#58a6ff',todo:'#6e7681',blocked:'#f85149',waiting:'#bc8cff'};
 // SL removed - unused, status labels now in i18n
-var APP_VERSION='v1.5'; // 随系统升级手动更新
+var APP_VERSION='v1.6'; // 随系统升级手动更新
 document.title='AI\u2014FUSANG '+APP_VERSION;
 var NW=120,NH=40,PAD_X=120,PAD_TOP=50,LGAP=82,PED_H=65;
 var treeScale=0.95, treeOffsetX=0, treeOffsetY=0; // 树整体缩放和偏移（打包用）
+
+// ====== postMessage Config (V4) ======
+var urlParams=new URLSearchParams(window.location.search);
+var SECRET=urlParams.get('secret')||'fusang-2026';
+var parentReady=false;
+var pendingAcks={}; // messageId → timeout
 
 // ====== Canvas 初始化 ======
 var cv=document.getElementById('c');
 var ctx=cv.getContext('2d');
 var W,H,layoutNodes=[],hoveredNode=null,selectedNode=null;
 var rootsExpanded=false,legendExpanded=false;
+var highlightNodeId=null, highlightNodeStart=0; // V4：高亮节点动画
 var now=0;
 // Language detection & switcher
 function detectLang(){
@@ -380,7 +402,7 @@ var demoLitSet={};              // S1/S4中已点亮的节点集合
 var i18n={
   zh:{
     title:'神秘的东方世界之树',
-    versionTitle:'AI—FUSANG v1.4',
+    versionTitle:'AI—FUSANG '+APP_VERSION,
     status:{done:'已完成','in-progress':'进行中',todo:'待办',blocked:'阻塞',waiting:'等待中'},
     pedestal:'🏞️ 运行环境 Runtime',
     roots:{expanded:'🔑 配置 ▲',collapsed:'🔑 配置 ▼'},
@@ -422,7 +444,7 @@ var i18n={
   },
   en:{
     title:'Mysterious Eastern World Tree',
-    versionTitle:'AI—FUSANG v1.4',
+    versionTitle:'AI—FUSANG '+APP_VERSION,
     status:{done:'Done','in-progress':'In Progress',todo:'Todo',blocked:'Blocked',waiting:'Waiting'},
     pedestal:'🏞️ Runtime Environment',
     roots:{expanded:'🔑 Config ▲',collapsed:'🔑 Config ▼'},
@@ -533,6 +555,53 @@ function layout(){
 
 function nodeById(id){return layoutNodes.find(function(n){return n.id===id;});}
 function taskById(id){return tasks.find(function(t){return t.id===id;});}
+
+// ====== V4 postMessage：发送节点点击事件 ======
+function sendNodeClick(nodeId){
+  // 检查是否在 iframe 中
+  if(window.parent===window){
+    console.log('[Fusang] ℹ️ 不在 iframe 中，不发送 postMessage');
+    return;
+  }
+  // 检查父窗口是否就绪
+  if(!parentReady){
+    console.warn('[Fusang] ⚠️ 父窗口未就绪，延迟发送消息');
+    // 延迟 1 秒后重试（最多重试 3 次）
+    setTimeout(function(){sendNodeClick(nodeId);},1000);
+    return;
+  }
+  // 获取节点数据
+  var task=taskById(nodeId);
+  if(!task){
+    console.warn('[Fusang] ⚠️ 节点不存在：'+nodeId);
+    return;
+  }
+  // 检查是否有 codeLocation
+  if(!task.codeLocation){
+    console.log('[Fusang] ℹ️ 节点无 codeLocation：'+nodeId);
+    // 可选：显示提示「该节点未关联代码文件」
+    return;
+  }
+  // 发送 postMessage
+  var messageId='msg_'+Date.now()+'_'+Math.random().toString(36).substr(2,5);
+  try {
+    parent.postMessage({
+      type:'FUSANG_NODE_CLICK',
+      messageId:messageId,
+      nodeId:nodeId,
+      codeLocation:task.codeLocation,
+      secret:SECRET
+    },'*');
+    console.log('[Fusang] ✉️ 发送 FUSANG_NODE_CLICK：'+nodeId,messageId);
+    // ACK 超时检测（3 秒）
+    pendingAcks[messageId]=setTimeout(function(){
+      console.warn('[Fusang] ⚠️ 消息超时未收到 ACK：'+messageId);
+      delete pendingAcks[messageId];
+    },3000);
+  } catch(e){
+    console.error('[Fusang] ❌ postMessage 发送失败：',e);
+  }
+}
 
 // ====== 缓动函数 ======
 function easeOut(t){return 1-Math.pow(1-t,3);}
@@ -775,6 +844,29 @@ function draw(timestamp){
   if(currentMode==='interactive' && now - lastClickTime > 8000){
     hideNodeMenu(); // 超时前先关闭菜单
     setMode('auto');
+  }
+
+  // V4：高亮节点动画（金色光晕 3 秒）
+  if(highlightNodeId&&highlightNodeStart>0){
+    var elapsed=now-highlightNodeStart;
+    if(elapsed<3000){
+      var node=nodeById(highlightNodeId);
+      if(node){
+        var glow=easeOut(1-elapsed/3000); // 0→1 淡出
+        ctx.save();
+        ctx.shadowColor='rgba(212,167,44,'+(0.8*glow)+')';
+        ctx.shadowBlur=20*glow;
+        ctx.strokeStyle='rgba(212,167,44,'+(0.6*glow)+')';
+        ctx.lineWidth=3;
+        ctx.beginPath();
+        ctx.arc(node.x,node.y,NH,0,Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    } else {
+      highlightNodeId=null;
+      highlightNodeStart=0;
+    }
   }
 
   requestAnimationFrame(draw);
@@ -1778,8 +1870,8 @@ function drawInfoCard(n){
       ctx.fillText(ccStr,cx+14,cy+72);
     }
 
-    // 操作按钮（非调试模式才画）
-    if(currentMode!=='interactive'){
+    // 操作按钮（非调试模式 && 非外接信号模式才画）
+    if(currentMode!=='interactive' && !parentReady){
       var btnW=90,btnH=22,btnY=cy+96;
       ctx.fillStyle='#58a6ff';
       ctx.beginPath();
@@ -1808,8 +1900,8 @@ function drawInfoCard(n){
     ctx.fillText(i18n[lang].infoCard.budHint, cx+14, cy+120);
   }
 
-  // 注入故障按钮（调试模式用弹出菜单替代）
-  if(realStatus==='done'&&currentMode!=='interactive'){
+  // 注入故障按钮（调试模式用弹出菜单替代；外接信号模式不显示）
+  if(realStatus==='done'&&currentMode!=='interactive'&&!parentReady){
     var btnW=90,btnH=22,btnY=cy+158;
     ctx.fillStyle='#f85149';
     ctx.beginPath();
@@ -1974,7 +2066,7 @@ cv.addEventListener('click',function(e){
 
   // 图例切换
   if(hitLegendToggle(mx,my)){
-    currentMode=null; // 用户交互 → 暂停 demo
+    if(!parentReady) currentMode=null; // 用户交互 → 暂停 demo（外部信号接入时不动模式）
     legendExpanded=!legendExpanded;
     return;
   }
@@ -1982,7 +2074,7 @@ cv.addEventListener('click',function(e){
   // 底座 → 切换树根
   if(hitPedestal(mx,my)){
     if(currentMode==='auto'){setMode('interactive');lastClickTime=performance.now();return;}
-    currentMode=null; // 用户交互 → 暂停 demo
+    if(!parentReady) currentMode=null; // 用户交互 → 暂停 demo（外部信号接入时不动模式）
     rootsExpanded=!rootsExpanded;
     return;
   }
@@ -1991,7 +2083,7 @@ cv.addEventListener('click',function(e){
   var bud=hitBud(lx,ly);
   if(bud){
     if(currentMode==='auto'){setMode('interactive');lastClickTime=performance.now();return;}
-    currentMode=null; // 用户交互 → 暂停 demo
+    if(!parentReady) currentMode=null; // 用户交互 → 暂停 demo（外部信号接入时不动模式）
     budTransitions.push({id:bud.id,startTime:now,duration:800});
     selectedNode=null; // 点花苞不显示InfoCard
     return;
@@ -2000,6 +2092,8 @@ cv.addEventListener('click',function(e){
   // 节点点击 → 调试模式弹出菜单 / 其他模式选中
   var hit=hitTest(lx,ly);
   if(hit){
+    // V4 postMessage：通知父窗口节点被点击
+    sendNodeClick(hit.id);
     if(currentMode==='auto'){
       setMode('interactive');lastClickTime=now;selectedNode=null;
       showNodeMenu(hit, e.clientX, e.clientY);
@@ -2012,11 +2106,13 @@ cv.addEventListener('click',function(e){
       e.stopPropagation(); // 阻止冒泡到document（否则菜单立即被关闭）
       return;
     }
+    // 接入模式（外部信号）：只发代码位置通知，不显示InfoCard
+    if(parentReady){return;}
     currentMode=null; selectedNode=hit; return;
   }
 
-  // InfoCard 按钮点击检测
-  if(selectedNode){
+  // InfoCard 按钮点击检测（外接信号模式不响应面板按钮，所有操作走控制面板）
+  if(selectedNode && !parentReady){
     var sn=selectedNode;
     var sRealStatus=getEffectiveStatus(sn.id);
     var sLiveTask=taskById(sn.id);
@@ -2047,11 +2143,194 @@ cv.addEventListener('click',function(e){
   // 点击空白区域
   if(currentMode==='auto'){setMode('interactive');lastClickTime=now;return;}
   if(currentMode==='interactive'){lastClickTime=now;hideNodeMenu();return;}
-  currentMode=null; selectedNode=null;
+  if(!parentReady) currentMode=null; selectedNode=null;
 });
+
+// ====== postMessage：接收父窗口消息 (V4) ======
+window.addEventListener('message',function(event){
+  // 验证 secret
+  if(!event.data||event.data.secret!==SECRET){
+    console.warn('[Fusang] ⚠️ Invalid secret from parent, ignoring');
+    return;
+  }
+
+  if(event.data.type==='FUSANG_READY'){
+    parentReady=true;
+    console.log('[Fusang] ✅ 父窗口已就绪 (parentReady=true)');
+    // 外部信号已连接 → 自动切入接入模式，禁用演示/调试
+    updateModeForConnection();
+    return;
+  }
+
+  if(event.data.type==='FUSANG_DISCONNECT'){
+    parentReady=false;
+    console.log('[Fusang] 🔌 外部信号已断开');
+    // 恢复演示/调试按钮
+    var autoBtn=document.getElementById('btn-auto');
+    var intBtn=document.getElementById('btn-interactive');
+    [autoBtn,intBtn].forEach(function(b){
+      if(b){
+        b.disabled=false;
+        b.style.opacity='1';
+        b.style.cursor='pointer';
+        b.style.color='#8b949e';
+        b.style.background='transparent';
+        b.style.boxShadow='none';
+        b.onclick=function(){setMode(this.id.replace('btn-',''));};
+      }
+    });
+    // 接入按钮恢复普通状态
+    var realBtn=document.getElementById('btn-real');
+    if(realBtn){
+      realBtn.style.background='transparent';
+      realBtn.style.color='#8b949e';
+      realBtn.style.fontWeight='normal';
+      realBtn.style.boxShadow='none';
+    }
+    // 切换到演示模式
+    setMode('auto');
+    return;
+  }
+
+  if(event.data.type==='FUSANG_HIGHLIGHT_NODE'){
+    var node=nodeById(event.data.nodeId);
+    if(node){
+      // 高亮节点：闪烁金色 3 秒
+      highlightNodeId=event.data.nodeId;
+      highlightNodeStart=performance.now();
+      console.log('[Fusang] ✨ 高亮节点：'+event.data.nodeId);
+    } else {
+      console.warn('[Fusang] ⚠️ 节点不存在：'+event.data.nodeId);
+    }
+    return;
+  }
+
+  // V4 新增：注入故障信号
+  if(event.data.type==='FUSANG_INJECT_FAULT'){
+    var nodeId=event.data.nodeId;
+    if(!nodeId){console.warn('[Fusang] ⚠️ INJECT_FAULT: nodeId 为空');return;}
+    var task=taskById(nodeId);
+    if(!task){console.warn('[Fusang] ⚠️ INJECT_FAULT: 节点不存在 '+nodeId);return;}
+    // 状态校验：只能对已搭建（done）节点注入故障
+    if(task.status==='todo'||task.status==='waiting'){
+      console.warn('[Fusang] ⛔ 节点 '+nodeId+' 未搭建，无法注入故障');
+      return;
+    }
+    // 注入故障：status → blocked + 错误信息（不 recalcAll，draw 中 getEffectiveStatus 自动传导下游）
+    task.status='blocked';
+    task.error={message:{zh:event.data.errorMsg||'外部信号触发故障',en:event.data.errorMsgEn||'External fault triggered'},file:task.file||'',line:1,callChain:[]};
+    requestAnimationFrame(draw);
+    console.log('[Fusang] 🔴 注入故障：'+nodeId);
+    return;
+  }
+
+  // V4 新增：AI 修复信号
+  if(event.data.type==='FUSANG_AI_FIX'){
+    var nodeId=event.data.nodeId;
+    if(!nodeId){console.warn('[Fusang] ⚠️ AI_FIX: nodeId 为空');return;}
+    var task=taskById(nodeId);
+    if(!task){console.warn('[Fusang] ⚠️ AI_FIX: 节点不存在 '+nodeId);return;}
+    // 状态校验：只修复故障节点
+    if(task.status!=='blocked'){
+      console.warn('[Fusang] ⛔ 节点 '+nodeId+' 无故障，无需修复');
+      return;
+    }
+    // AI 修复：只修复目标节点，不自动传导下游（让用户自己搭建）
+    task.status='done';
+    task.error=null;
+    requestAnimationFrame(draw);
+    console.log('[Fusang] 🤖 AI 修复：'+nodeId);
+    return;
+  }
+
+  // V4 新增：人工修复信号
+  if(event.data.type==='FUSANG_MANUAL_FIX'){
+    var nodeId=event.data.nodeId;
+    if(!nodeId){console.warn('[Fusang] ⚠️ MANUAL_FIX: nodeId 为空');return;}
+    var task=taskById(nodeId);
+    if(!task){console.warn('[Fusang] ⚠️ MANUAL_FIX: 节点不存在 '+nodeId);return;}
+    // 状态校验：只修复故障节点
+    if(task.status!=='blocked'){
+      console.warn('[Fusang] ⛔ 节点 '+nodeId+' 无故障，无需修复');
+      return;
+    }
+    // 人工修复：只修复目标节点，不自动传导下游（让用户自己搭建）
+    task.status='done';
+    task.error=null;
+    requestAnimationFrame(draw);
+    console.log('[Fusang] ✋ 人工修复：'+nodeId);
+    return;
+  }
+
+  // V4 新增：通用设置状态信号（接通/故障/进行中/待办）
+  if(event.data.type==='FUSANG_SET_STATUS'){
+    var nodeId=event.data.nodeId;
+    var newStatus=event.data.status;
+    if(!nodeId||!newStatus){console.warn('[Fusang] ⚠️ SET_STATUS: 参数不完整');return;}
+    var task=taskById(nodeId);
+    if(!task){console.warn('[Fusang] ⚠️ SET_STATUS: 节点不存在 '+nodeId);return;}
+    task.status=newStatus;
+    if(newStatus!=='blocked') task.error=null; else task.error=task.error||{message:{zh:'外部信号',en:'External signal'},file:task.file||'',line:1,callChain:[]};
+    requestAnimationFrame(draw);
+    console.log('[Fusang] 📶 设置状态：'+nodeId+'→'+newStatus);
+    return;
+  }
+
+  console.log('[Fusang] 📨 收到未知消息：',event.data.type);
+});
+
+// ====== 外部信号接入：锁定模式 ======
+function updateModeForConnection(){
+  if(!parentReady) return;
+  // 切换到接入模式（不 resetToAllGreen，而是置所有节点为未开启状态）
+  currentMode='real';
+  modeStep=0;
+  modeStartTime=performance.now();
+  selectedNode=null;
+  rootsExpanded=false;
+  demoState=-1;
+  demoDimOverlay=false;
+  demoLitSet={};
+  hideNodeMenu();
+  cv.style.border='none';
+  // 所有节点进入「未开启」待激活状态
+  tasks.forEach(function(t){t.status='todo';t.error=null;});
+  recalcAll();
+  // 禁用演示按钮
+  var autoBtn=document.getElementById('btn-auto');
+  var intBtn=document.getElementById('btn-interactive');
+  [autoBtn,intBtn].forEach(function(b){
+    if(b){
+      b.disabled=true;
+      b.style.opacity='0.3';
+      b.style.cursor='not-allowed';
+      b.style.color='#484f58';
+      b.style.background='transparent';
+      b.style.boxShadow='none';
+      b.onclick=function(){return false;};
+    }
+  });
+  // 接入按钮常亮（绿色=已连接）
+  var realBtn=document.getElementById('btn-real');
+  if(realBtn){
+    realBtn.disabled=false;
+    realBtn.style.cursor='default';
+    realBtn.style.opacity='1';
+    realBtn.style.color='#0d1117';
+    realBtn.style.background='linear-gradient(135deg,#3fb950,#2ea043)';
+    realBtn.style.fontWeight='bold';
+    realBtn.style.boxShadow='0 0 12px rgba(63,185,80,0.5)';
+  }
+  console.log('[Fusang] 🔌 外部信号接入 → 所有节点未开启，等待信号激活');
+}
 
 // ====== 模式切换 ======
 function setMode(mode){
+  // 外部信号已接入时，禁止切换到演示/调试模式
+  if(parentReady && mode!=='real'){
+    console.log('[Fusang] ⛔ 外部信号接入中，禁止切换到 '+mode+' 模式');
+    return;
+  }
   if(mode==='real'){
     demoState=-1;
     demoDimOverlay=false;

@@ -20,3 +20,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Project config (local)
+project.config.json
+project.private.config.json

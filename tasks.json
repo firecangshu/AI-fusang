@@ -15,7 +15,7 @@
       "zh": "主干起点",
       "en": "Trunk Start"
     },
-    "file": "src/main.ts",
+    "codeLocation": {"file": "src/main.ts", "line": 10, "column": 1},
     "error": null
   },
   {
@@ -34,7 +34,7 @@
       "zh": "树根 · 密钥",
       "en": "Roots · Keys"
     },
-    "file": "src/config/index.ts",
+    "codeLocation": {"file": "src/config/index.ts", "line": 25, "column": 1},
     "error": null
   },
   {
@@ -53,7 +53,7 @@
       "zh": "枝干",
       "en": "Branch"
     },
-    "file": "src/db/connection.ts",
+    "codeLocation": {"file": "src/db/connection.ts", "line": 42, "column": 1},
     "error": null
   },
   {
@@ -72,7 +72,7 @@
       "zh": "枝干",
       "en": "Branch"
     },
-    "file": "src/cache/redis.ts",
+    "codeLocation": {"file": "src/cache/redis.ts", "line": 18, "column": 1},
     "error": null
   },
   {
@@ -91,7 +91,7 @@
       "zh": "金乌 · 触发器",
       "en": "Crow · Trigger"
     },
-    "file": "src/api/routes.ts",
+    "codeLocation": {"file": "src/api/routes.ts", "line": 55, "column": 1},
     "error": null
   },
   {
@@ -110,7 +110,7 @@
       "zh": "花苞",
       "en": "Bud"
     },
-    "file": "src/auth/jwt.ts",
+    "codeLocation": {"file": "src/auth/jwt.ts", "line": 33, "column": 1},
     "error": null
   },
   {
@@ -129,7 +129,7 @@
       "zh": "枝干",
       "en": "Branch"
     },
-    "file": "client/App.jsx",
+    "codeLocation": {"file": "client/App.jsx", "line": 77, "column": 1},
     "error": null
   },
   {
@@ -148,7 +148,7 @@
       "zh": "枝干",
       "en": "Branch"
     },
-    "file": "test/**/*.test.js",
+    "codeLocation": {"file": "test/**/*.test.js", "line": 5, "column": 1},
     "error": null
   },
   {
@@ -167,7 +167,7 @@
       "zh": "盘龙 · 监控",
       "en": "Dragon · Monitor"
     },
-    "file": ".github/workflows/ci.yml",
+    "codeLocation": {"file": ".github/workflows/ci.yml", "line": 12, "column": 1},
     "error": null
   },
   {
@@ -187,7 +187,7 @@
       "zh": "树顶 · 太阳",
       "en": "Crown · Sun"
     },
-    "file": "deploy.sh",
+    "codeLocation": {"file": "deploy.sh", "line": 1, "column": 1},
     "error": null
   }
 ]
