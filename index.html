@@ -11,6 +11,35 @@
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden;background:#0d1117;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif}
 canvas{display:block}
+/* 接入模式右侧面板 */
+.live-panel{position:fixed;top:45px;right:0;bottom:0;width:280px;min-width:200px;max-width:600px;z-index:9998;background:#0d1117;border-left:1px solid #30363d;display:none;flex-direction:column;overflow:hidden;}
+.live-panel.open{display:flex;}
+.live-handle{position:fixed;top:45px;bottom:0;width:10px;right:280px;z-index:9999;cursor:col-resize;background:transparent;transition:background 0.15s;}
+.live-handle:hover,.live-handle.dragging{background:#1a2332;}
+.live-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#4a5568;width:2px;height:36px;border-radius:2px;opacity:0.35;transition:opacity 0.2s;}
+.live-handle:hover::after,.live-handle.dragging::after{opacity:0.8;}
+.live-inner{padding:8px 10px;border-bottom:1px solid #30363d;flex-shrink:0;}
+.live-inner h3{font-size:11px;color:#58a6ff;margin:0 0 4px 0;display:flex;align-items:center;gap:4px;}
+.live-log{font-family:'JetBrains Mono',monospace;font-size:10px;color:#e6edf3;background:#161b22;padding:4px 6px;border-radius:3px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;flex:1;min-height:0;margin:0;}
+.live-btn{background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:3px;padding:2px 7px;font-size:10px;cursor:pointer;margin:1px;display:inline-block;}
+.live-btn:hover{background:#30363d;}
+.live-btn:disabled{opacity:0.3;cursor:not-allowed;}
+.live-sel{background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:3px;padding:2px 4px;font-size:10px;font-family:inherit;flex:1;}
+.live-help{font-size:10px;color:#8b949e;line-height:1.5;padding:0 0 4px 0;}
+/* 状态栏 */
+.live-status-bar{display:flex;align-items:center;gap:4px;font-size:10px;white-space:nowrap;flex-wrap:wrap;padding:4px 10px;border-bottom:1px solid #30363d;background:rgba(22,27,34,0.6);flex-shrink:0;}
+.live-stage{display:flex;align-items:center;gap:3px;background:rgba(22,27,34,0.6);border:1px solid #30363d;border-radius:3px;padding:2px 5px;}
+.live-stage-label{color:#8b949e;font-size:9px;white-space:nowrap;}
+.live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.live-dot.signal-on{background:#3fb950;box-shadow:0 0 5px rgba(63,185,80,0.5);}
+.live-dot.signal-off{background:#6e7681;}
+.live-dot.connected{background:#3fb950;box-shadow:0 0 5px rgba(63,185,80,0.5);}
+.live-dot.disconnected{background:#6e7681;}
+.live-switch{display:inline-flex;align-items:center;gap:4px;padding:1px 6px;border-radius:3px;cursor:pointer;font-size:9px;border:1px solid #30363d;transition:all 0.15s;font-family:inherit;white-space:nowrap;}
+.live-switch.off{background:#161b22;color:#8b949e;}
+.live-switch.on{background:#0d2818;color:#3fb950;border-color:#3fb950;box-shadow:0 0 5px rgba(63,185,80,0.2);}
+.live-switch:disabled{opacity:0.25;cursor:not-allowed;}
+.live-toggle-text{font-weight:bold;letter-spacing:1px;}
 </style>
 </head>
 <body>
@@ -27,6 +56,65 @@ canvas{display:block}
   <button id="btn-auto" onclick="setMode('auto')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎬 演示</button>
   <button id="btn-interactive" onclick="setMode('interactive')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎮 调试</button>
   <button id="btn-real" onclick="setMode('real')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🔌 接入</button>
+</div>
+
+<!-- 接入模式：右侧拖拽手柄 -->
+<div class="live-handle" id="live-handle" style="display:none;"></div>
+
+<!-- 接入模式：右侧控制面板 -->
+<div class="live-panel" id="live-panel">
+  <!-- 三段式状态栏 -->
+  <div class="live-status-bar" id="live-status-bar">
+    <div class="live-stage">
+      <span class="live-dot signal-off" id="live-signal-dot"></span>
+      <span class="live-stage-label" id="live-label-signal">信号</span>
+    </div>
+    <div class="live-stage">
+      <span class="live-stage-label" id="live-label-external">模拟</span>
+      <button class="live-switch off" id="live-switch-btn" onclick="toggleLiveSwitch()">
+        <span class="live-toggle-text" id="live-switch-text">OFF</span>
+      </button>
+    </div>
+    <div class="live-stage">
+      <span class="live-dot disconnected" id="live-connect-dot"></span>
+      <span class="live-stage-label" id="live-label-connected">连接</span>
+    </div>
+  </div>
+  <div class="live-inner">
+    <h3 id="live-panel-title">🎮 控制面板</h3>
+    <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
+      <span style="font-size:10px;color:#8b949e;white-space:nowrap;" id="live-node-label">节点</span>
+      <select class="live-sel" id="live-node-select"></select>
+    </div>
+    <div style="margin-bottom:2px;font-size:9px;color:#58a6ff;" id="live-section-build">─ 搭建 ─</div>
+    <div style="margin-bottom:4px;display:flex;gap:2px;">
+      <button class="live-btn" id="live-btn-build" onclick="liveBuild()" style="background:#2ea043;color:#fff;border-color:#2ea043;">🟢搭建</button>
+      <button class="live-btn" id="live-btn-fault" onclick="liveFault()" style="background:#e53935;color:#fff;border-color:#e53935;">🔴故障</button>
+    </div>
+    <div style="margin-bottom:2px;font-size:9px;color:#58a6ff;" id="live-section-fix">─ 修复 ─</div>
+    <div style="margin-bottom:4px;display:flex;gap:2px;">
+      <button class="live-btn" id="live-btn-ai" onclick="liveAiFix()" style="background:#00b365;color:#fff;border-color:#00b365;">🤖AI修复</button>
+      <button class="live-btn" id="live-btn-manual" onclick="liveManualFix()" style="background:#f5a623;color:#fff;border-color:#f5a623;">✋人工修复</button>
+    </div>
+  </div>
+  <div class="live-inner" style="flex:1;display:flex;flex-direction:column;min-height:0;">
+    <h3><span id="live-log-title">📋 消息日志</span>
+      <span style="float:right;font-size:9px;color:#8b949e;cursor:pointer;" id="live-btn-copy" onclick="liveCopyLog()">[📋复制]</span>
+      <span style="float:right;font-size:9px;color:#8b949e;cursor:pointer;margin-right:6px;" id="live-btn-clear" onclick="liveClearLog()">[🗑️清空]</span>
+    </h3>
+    <div class="live-log" id="live-log"></div>
+  </div>
+  <div class="live-inner" style="padding:4px 10px;">
+    <div style="font-size:10px;color:#58a6ff;cursor:pointer;" onclick="liveToggleHelp()">
+      <span id="live-help-arrow">▶</span> <span id="live-help-title">ℹ️ 使用说明</span>
+    </div>
+    <div id="live-help-body" style="display:none;padding:4px 0 0 12px;" class="live-help">
+      <div id="live-help1">1. 打开信号开关 → 控制面板解锁</div>
+      <div id="live-help2">2. 上游阻塞 → 下游自动等待（红变紫）</div>
+      <div id="live-help3">3. 上游修复 → 下游自动接通</div>
+      <div id="live-help4">4. 📋复制日志 → 导出分析</div>
+    </div>
+  </div>
 </div>
 
 <!-- 调试模式：节点操作弹出菜单 -->
@@ -319,7 +407,7 @@ var edges=[
 // ====== 常量 ======
 var SC={done:'#3fb950','in-progress':'#58a6ff',todo:'#6e7681',blocked:'#f85149',waiting:'#bc8cff'};
 // SL removed - unused, status labels now in i18n
-var APP_VERSION='v1.7'; // 随系统升级手动更新
+var APP_VERSION='v1.8'; // 随系统升级手动更新
 document.title='AI\u2014FUSANG '+APP_VERSION;
 var NW=120,NH=40,PAD_X=120,PAD_TOP=50,LGAP=82,PED_H=65;
 var treeScale=0.95, treeOffsetX=0, treeOffsetY=0; // 树整体缩放和偏移（打包用）
@@ -358,6 +446,7 @@ function setLang(l){
   // 更新调试控制台标签
   var debugLabel=document.getElementById('debug-console-label');
   if(debugLabel) debugLabel.textContent=i18n[l].debugConsole;
+  applyLiveLang();
 }
 function updateLangButtons(){
   var bZh=document.getElementById('btn-zh'), bEn=document.getElementById('btn-en');
@@ -371,8 +460,8 @@ function updateLangButtons(){
   }
 }
 lang=detectLang();
-setLang(lang);  // 初始化模式按钮文本和标题（与检测到的语言一致）
-// document.title will be set after i18n definition below
+// 注意：setLang(lang) 不在此处调用——i18n 对象尚未定义（见下方第 463 行）
+// 语言初始化（标题、按钮文本、applyLiveLang）由 i18n 定义后的 IIFE 统一处理（第 595-606 行）
 
 // ====== 动画状态 ======
 var budTransitions=[];  // {id, startTime, duration:800, done:false}
@@ -381,6 +470,10 @@ var dragonParticles=[];  // {t, speed} t∈[0,1] 沿龙身路径参数
 var blockedWarnings=[];   // {nodeId, startTime} 阻塞节点警告
 var edgeParticles=[];    // {edge, t, speed} 边级逆流粒子
 var fixAnimations=[];    // {nodeId, startTime, phase:'flash'|'glow'|'particles'}
+var globalFlashStart=0;   // 全局闪烁开始时间（0=无闪烁）
+var globalGlowStart=0;    // 全局光晕开始时间（0=无光晕）
+var lastExtSignalTime=0;    // 最后一次收到外部信号的时间（用于断开检测）
+var accessModeLastActive=0; // 接入模式下最后一次操作时间（用于空闲退出，3分钟无操作自动切回演示）
 // 演示模式状态机变量
 var demoState=0;             // S0-S10 状态
 var demoStartTime=0;         // 当前状态开始时间
@@ -444,7 +537,50 @@ var i18n={
       {icon:'🐉',label:'盘龙',desc:'异常监控/Watchdog'},
       {icon:'👑',label:'树顶',desc:'程序出口/Exit'}
     ],
-    debugConsole:'Debug Console'
+    debugConsole:'Debug Console',
+    // 接入面板
+    livePanel:'🎮 控制面板',
+    liveNode:'节点',
+    liveSectionBuild:'─ 搭建 ─',
+    liveBuild:'🟢搭建',
+    liveFault:'🔴故障',
+    liveSectionFix:'─ 修复 ─',
+    liveAiFix:'🤖AI修复',
+    liveManualFix:'✋人工修复',
+    liveLogTitle:'📋 消息日志',
+    liveCopy:'[📋复制]',
+    liveClear:'[🗑️清空]',
+    liveHelp:'ℹ️ 使用说明',
+    liveHelp1:'1. 打开信号开关 → 控制面板解锁',
+    liveHelp2:'2. 上游阻塞 → 下游自动等待（红变紫）',
+    liveHelp3:'3. 上游修复 → 下游自动接通',
+    liveHelp4:'4. 📋复制日志 → 导出分析',
+    liveLogLoaded:'测试面板已加载',
+    liveLogReady:'模拟信号就绪，等待开启开关',
+    liveLogExternal:'🔌 外部信号已接管',
+    liveLogDisconnected:'⚠️ 外部信号已断开',
+    liveConnected:'已连接',
+    liveDisconnected:'未连接',
+    liveLogSwitchOn:'🔛 模拟开关 → ON（控制面板已解锁）',
+    liveLogSwitchOff:'🔛 模拟开关 → OFF（控制面板已锁定）',
+    // 接入面板操作日志
+    liveLogNodeNotFound:'⚠️ 节点不存在: ',
+    liveLogBuild:'🟢 搭建: ',
+    liveLogNodeNotBuilt:'⛔ 节点未搭建: ',
+    liveLogNodeAlreadyDone:'⚠️ 节点已搭建，无需重复: ',
+    liveLogFault:'🔴 故障: ',
+    liveLogAiFix:'🤖 AI修复: ',
+    liveLogNodeNotFaulty:'⛔ 节点无故障: ',
+    liveLogManualFix:'✋ 人工修复: ',
+    liveLogNodeFaulted:'⚠️ 节点故障中，请先修复: ',
+    liveLogEmpty:'⚠️ 日志为空',
+    liveLogCopied:'✅ 日志已复制 (',
+    liveLogCopiedFallback:'✅ 日志已复制 (fallback)',
+    liveLogCleared:'日志已清空',
+    // 状态栏
+    liveLabelSignal:'信号',
+    liveLabelExternal:'模拟',
+    liveLabelConnected:'连接'
   },
   en:{
     title:'Mysterious Eastern World Tree',
@@ -487,12 +623,81 @@ var i18n={
       {icon:'🐉',label:'Dragon',desc:'Watchdog/Monitor'},
       {icon:'👑',label:'Crown',desc:'Program Exit'}
     ],
-    debugConsole:'Debug Console'
+    debugConsole:'Debug Console',
+    // 接入面板
+    livePanel:'🎮 Control Panel',
+    liveNode:'Node',
+    liveSectionBuild:'─ Build ─',
+    liveBuild:'🟢Build',
+    liveFault:'🔴Fault',
+    liveSectionFix:'─ Fix ─',
+    liveAiFix:'🤖AI Fix',
+    liveManualFix:'✋Manual Fix',
+    liveLogTitle:'📋 Message Log',
+    liveCopy:'[📋Copy]',
+    liveClear:'[🗑️Clear]',
+    liveHelp:'ℹ️ Help',
+    liveHelp1:'1. Turn switch ON → unlock panel',
+    liveHelp2:'2. Upstream blocked → downstream waiting (red→purple)',
+    liveHelp3:'3. Upstream fixed → downstream auto-done',
+    liveHelp4:'4. 📋Copy log → export analysis',
+    liveLogLoaded:'Live panel loaded',
+    liveLogReady:'Sim signal ready, awaiting switch ON',
+    liveLogExternal:'🔌 External signal has taken over',
+    liveLogDisconnected:'⚠️ External signal disconnected',
+    liveConnected:'Connected',
+    liveDisconnected:'Disconnected',
+    liveLogSwitchOn:'🔛 Sim switch → ON (panel unlocked)',
+    liveLogSwitchOff:'🔛 Sim switch → OFF (panel locked)',
+    // Access panel operation logs
+    liveLogNodeNotFound:'⚠️ Node not found: ',
+    liveLogBuild:'🟢 Build: ',
+    liveLogNodeNotBuilt:'⛔ Node not built: ',
+    liveLogNodeAlreadyDone:'⚠️ Node already done: ',
+    liveLogFault:'🔴 Fault: ',
+    liveLogAiFix:'🤖 AI Fix: ',
+    liveLogNodeNotFaulty:'⛔ Node not faulty: ',
+    liveLogManualFix:'✋ Manual Fix: ',
+    liveLogNodeFaulted:'⚠️ Node is faulted, please fix first: ',
+    liveLogEmpty:'⚠️ Log is empty',
+    liveLogCopied:'✅ Log copied (',
+    liveLogCopiedFallback:'✅ Log copied (fallback)',
+    liveLogCleared:'Log cleared',
+    // Status bar
+    liveLabelSignal:'Signal',
+    liveLabelExternal:'Sim',
+    liveLabelConnected:'Link'
   }
 };
 
+// t() 翻译函数（安全网，防止未来有人用 t('key') 调用）
+function t(key){return(i18n[lang]&&i18n[lang][key]!==undefined)?i18n[lang][key]:((i18n.en&&i18n.en[key])||key);}
+
 // Now that i18n is defined, set document title
 document.title=i18n[lang].versionTitle;
+// 初始化模式按钮文本和调试控制台标签
+(function(){
+  var modes=['auto','interactive','real'];
+  modes.forEach(function(m){
+    var btn=document.getElementById('btn-'+m);
+    if(btn) btn.innerText=i18n[lang].modeLabels[m];
+  });
+  var debugLabel=document.getElementById('debug-console-label');
+  if(debugLabel) debugLabel.textContent=i18n[lang].debugConsole;
+  applyLiveLang();
+})();
+
+// 接入面板 i18n 同步
+function applyLiveLang(){
+  var ids=['live-panel-title','live-node-label','live-section-build','live-btn-build','live-btn-fault','live-section-fix','live-btn-ai','live-btn-manual','live-log-title','live-btn-copy','live-btn-clear','live-help-title','live-help1','live-help2','live-help3','live-help4',
+    'live-label-signal','live-label-external','live-label-connected'];
+  var keys=['livePanel','liveNode','liveSectionBuild','liveBuild','liveFault','liveSectionFix','liveAiFix','liveManualFix','liveLogTitle','liveCopy','liveClear','liveHelp','liveHelp1','liveHelp2','liveHelp3','liveHelp4',
+    'liveLabelSignal','liveLabelExternal','liveLabelConnected'];
+  for(var i=0;i<ids.length;i++){
+    var el=document.getElementById(ids[i]);
+    if(el) el.textContent=i18n[lang][keys[i]];
+  }
+}
 
 // ====== 拓扑排序：获取执行顺序 ======
 function getExecutionOrder(){
@@ -529,8 +734,12 @@ function getExecutionOrder(){
 }
 
 function resize(){
-  W=cv.width=window.innerWidth;
-  H=cv.height=window.innerHeight;
+  var panel=document.getElementById('live-panel');
+  var panelOpen=panel&&panel.classList.contains('open');
+  var pw=panelOpen?panel.offsetWidth:0;
+  cv.width=window.innerWidth-pw;
+  cv.height=window.innerHeight;
+  W=cv.width; H=cv.height;
   layout();
 }
 
@@ -891,6 +1100,52 @@ function draw(timestamp){
       highlightNodeId=null;
       highlightNodeStart=0;
     }
+  }
+
+  // 全局视觉反馈：外部信号接入成功时的闪烁+光晕
+  if(globalFlashStart>0){
+    var fElapsed=now-globalFlashStart;
+    if(fElapsed<2000){
+      // 闪烁效果：全屏白色覆盖层，alpha 呼吸闪烁
+      var flashAlpha=0.25+0.15*Math.sin(now/80);
+      ctx.save();
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.fillStyle='rgba(255,255,255,'+flashAlpha+')';
+      ctx.fillRect(0,0,W,H);
+      ctx.restore();
+    } else {
+      globalFlashStart=0; // 2秒后停止闪烁
+    }
+  }
+  if(globalGlowStart>0){
+    var gElapsed=now-globalGlowStart;
+    if(gElapsed<3000){
+      // 光晕效果：树外围金色发光
+      var glow=easeOut(1-gElapsed/3000);
+      ctx.save();
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.shadowColor='rgba(212,167,44,'+(0.7*glow)+')';
+      ctx.shadowBlur=40*glow;
+      ctx.strokeStyle='rgba(212,167,44,'+(0.3*glow)+')';
+      ctx.lineWidth=2;
+      ctx.beginPath();
+      ctx.ellipse(W/2,H/2,W*0.38,H*0.32,0,0,Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      globalGlowStart=0; // 3秒后停止光晕
+    }
+  }
+
+  // ★ 超时自动退出检测
+  // 1) 接入模式空闲：3分钟无任何操作 → 退回演示模式
+  if(currentMode==='real' && accessModeLastActive>0 && now-accessModeLastActive>3*60*1000){
+    console.log('[Fusang] ⏱️ 接入模式空闲3分钟，自动退回演示模式');
+    setMode('auto'); // 直接切回演示模式（会自动收起面板+恢复按钮）
+  }
+  // 2) 外部信号断开：parentReady后3分钟无新信号 → 断开处理
+  if(parentReady && lastExtSignalTime>0 && now-lastExtSignalTime>3*60*1000){
+    handleDisconnect();
   }
 
   requestAnimationFrame(draw);
@@ -1381,7 +1636,7 @@ function drawFixAnimations(){
     if(f.phase==='flash'&&elapsed>=300){
       f.phase='glow';
       var task=taskById(f.nodeId);
-      if(task&&task.status==='fixed'){task.status='done';task.error=null;sendStatusChange(f.nodeId,'fixed','done');recalcAll();}
+      if(task&&task.status==='fixed'){task.status='done';task.error=null;sendStatusChange(f.nodeId,'fixed','done');if(currentMode!=='real') recalcAll();}
     }
     if(f.phase==='glow'&&elapsed>=1100){
       f.phase='particles';
@@ -2136,7 +2391,9 @@ cv.addEventListener('click',function(e){
       e.stopPropagation(); // 阻止冒泡到document（否则菜单立即被关闭）
       return;
     }
-    // 接入模式（外部信号）：只发代码位置通知，不显示InfoCard
+    // 接入模式：树为观察器，不响应点击
+    if(currentMode==='real'){return;}
+    // 接入模式（外部信号已接入）：只发代码位置通知，不显示InfoCard
     if(parentReady){return;}
     currentMode=null; selectedNode=hit; return;
   }
@@ -2179,46 +2436,102 @@ cv.addEventListener('click',function(e){
 // ====== postMessage：接收父窗口消息 (V4) ======
 window.addEventListener('message',function(event){
   // 验证 secret
-  if(!event.data||event.data.secret!==SECRET){
+  if(!event.data || event.data.secret !== SECRET){
     console.warn('[Fusang] ⚠️ Invalid secret from parent, ignoring');
     return;
+  }
+  // 收到合法消息 → 重置断开检测定时器 + 空闲计时器
+  lastExtSignalTime=performance.now();
+  if(currentMode==='real') accessModeLastActive=performance.now();
+  if(parentReady){
+    var dot=document.getElementById('live-connect-dot');
+    if(dot) dot.className='live-dot connected';
+    var txt=document.getElementById('live-connect-text');
+    if(txt) txt.textContent=i18n[lang].liveConnected||'已连接';
   }
 
   if(event.data.type==='FUSANG_READY'){
     parentReady=true;
-    console.log('[Fusang] ✅ 父窗口已就绪 (parentReady=true)');
-    // 外部信号已连接 → 自动切入接入模式，禁用演示/调试
-    updateModeForConnection();
+    lastExtSignalTime=performance.now();
+    console.log('[Fusang] ✅ 外部信号已接管（最高优先权）');
+    // ★ 强制接管：不管当前什么状态，外部信号一来就重置一切
+    tasks.forEach(function(t){t.status='todo';t.error=null;});
+    demoState=-1;demoDimOverlay=false;demoLitSet={};
+    // 禁用演示/调试按钮
+    var autoBtn=document.getElementById('btn-auto');
+    var intBtn=document.getElementById('btn-interactive');
+    [autoBtn,intBtn].forEach(function(b){
+      if(b){b.disabled=true;b.style.opacity='0.3';b.style.cursor='not-allowed';b.style.color='#484f58';b.style.background='transparent';b.style.boxShadow='none';}
+    });
+    // 接入按钮常亮
+    var realBtn=document.getElementById('btn-real');
+    if(realBtn){realBtn.disabled=false;realBtn.style.cursor='default';realBtn.style.opacity='1';realBtn.style.color='#0d1117';realBtn.style.background='linear-gradient(135deg,#3fb950,#2ea043)';realBtn.style.fontWeight='bold';realBtn.style.boxShadow='0 0 12px rgba(63,185,80,0.5)';}
+    // 确保面板打开
+    document.getElementById('live-panel').classList.add('open');
+    document.getElementById('live-handle').style.display='block';
+    if(!window._liveInitialized){ initLivePanel(); }
+    // ★ 触发全屏闪烁 + 光晕效果
+    globalFlashStart=performance.now();
+    tasks.forEach(function(t){t._haloStart=performance.now();});
+    // 重置模拟开关为 OFF（外部信号接管后模拟功能让出）
+    _liveSwitchOn=false;
+    var swBtn=document.getElementById('live-switch-btn');
+    var swTxt=document.getElementById('live-switch-text');
+    if(swBtn) swBtn.className='live-switch off';
+    if(swTxt) swTxt.textContent='OFF';
+    enableLiveControls(false);
+    // 更新连接状态灯
+    var dot=document.getElementById('live-connect-dot');
+    if(dot) dot.className='live-dot connected';
+    var txt=document.getElementById('live-connect-text');
+    if(txt) txt.textContent=i18n[lang].liveConnected||'已连接';
+    // 触发全局视觉反馈
+    globalFlashStart=performance.now();
+    globalGlowStart=performance.now();
+    currentMode='real';
+    resize();
+    requestAnimationFrame(draw);
+    console.log('[Fusang] 🔌 外部信号已完全接管，所有节点重置为未搭建');
+    return;
+  }
+
+  // V4：收到父窗口对节点点击的 ACK（清除超时定时器，防止内存泄漏）
+  if(event.data.type==='FUSANG_NODE_CLICK_ACK'){
+    var ackMsgId=event.data.messageId;
+    if(ackMsgId && pendingAcks[ackMsgId]){
+      clearTimeout(pendingAcks[ackMsgId]);
+      delete pendingAcks[ackMsgId];
+      console.log('[Fusang] ✅ 收到 ACK：'+ackMsgId);
+    }
+    return;
+  }
+
+  // V4：外部系统通知"节点已搭建完成"
+  if(event.data.type==='FUSANG_BUILD_NODE'){
+    var nodeId=event.data.nodeId;
+    if(!nodeId){console.warn('[Fusang] ⚠️ BUILD_NODE: nodeId 为空');return;}
+    var task=taskById(nodeId);
+    if(!task){console.warn('[Fusang] ⚠️ BUILD_NODE: 节点不存在 '+nodeId);return;}
+    // 故障节点不允许搭建，需先修复
+    if(task.status==='blocked'){
+      console.warn('[Fusang] ⚠️ BUILD_NODE: 节点故障中，请先修复 '+nodeId);
+      return;
+    }
+    // 已搭建则提示，不重复操作
+    if(task.status==='done'){
+      console.log('[Fusang] ⚠️ BUILD_NODE: 节点已搭建，无需重复 '+nodeId);
+      return;
+    }
+    var oldSt=task.status;
+    task.status='done';task.error=null;
+    sendStatusChange(nodeId,oldSt,'done');
+    liveLog(i18n[lang].liveLogBuild+nodeId+' (外部信号)');
+    console.log('[Fusang] 🟢 外部信号 → 搭建: '+nodeId);
     return;
   }
 
   if(event.data.type==='FUSANG_DISCONNECT'){
-    parentReady=false;
-    console.log('[Fusang] 🔌 外部信号已断开');
-    // 恢复演示/调试按钮
-    var autoBtn=document.getElementById('btn-auto');
-    var intBtn=document.getElementById('btn-interactive');
-    [autoBtn,intBtn].forEach(function(b){
-      if(b){
-        b.disabled=false;
-        b.style.opacity='1';
-        b.style.cursor='pointer';
-        b.style.color='#8b949e';
-        b.style.background='transparent';
-        b.style.boxShadow='none';
-        b.onclick=function(){setMode(this.id.replace('btn-',''));};
-      }
-    });
-    // 接入按钮恢复普通状态
-    var realBtn=document.getElementById('btn-real');
-    if(realBtn){
-      realBtn.style.background='transparent';
-      realBtn.style.color='#8b949e';
-      realBtn.style.fontWeight='normal';
-      realBtn.style.boxShadow='none';
-    }
-    // 切换到演示模式
-    setMode('auto');
+    handleDisconnect();
     return;
   }
 
@@ -2246,7 +2559,8 @@ window.addEventListener('message',function(event){
       console.warn('[Fusang] ⛔ 节点 '+nodeId+' 未搭建，无法注入故障');
       return;
     }
-    // 注入故障：status → blocked + 错误信息（不 recalcAll，draw 中 getEffectiveStatus 自动传导下游）
+    // 注入故障：只设目标节点 blocked，不 recalcAll
+    // 下游等待/阻塞视觉效果由 getEffectiveStatus() 渲染时自动计算
     var oldStatus=task.status;
     task.status='blocked';
     task.error={message:{zh:event.data.errorMsg||'外部信号触发故障',en:event.data.errorMsgEn||'External fault triggered'},file:task.file||'',line:1,callChain:[]};
@@ -2267,7 +2581,7 @@ window.addEventListener('message',function(event){
       console.warn('[Fusang] ⛔ 节点 '+nodeId+' 无故障，无需修复');
       return;
     }
-    // AI 修复：只修复目标节点，不自动传导下游（让用户自己搭建）
+    // AI 修复：只修复目标节点，不自动传导下游（接入模式=逐级操作）
     var oldStatus=task.status;
     task.status='done';
     task.error=null;
@@ -2288,7 +2602,7 @@ window.addEventListener('message',function(event){
       console.warn('[Fusang] ⛔ 节点 '+nodeId+' 无故障，无需修复');
       return;
     }
-    // 人工修复：只修复目标节点，不自动传导下游（让用户自己搭建）
+    // 人工修复：只修复目标节点，不自动传导下游
     var oldStatus=task.status;
     task.status='done';
     task.error=null;
@@ -2309,6 +2623,8 @@ window.addEventListener('message',function(event){
     task.status=newStatus;
     if(newStatus!=='blocked') task.error=null; else task.error=task.error||{message:{zh:'外部信号',en:'External signal'},file:task.file||'',line:1,callChain:[]};
     sendStatusChange(nodeId, oldStatus, newStatus);
+    // 接入模式：不调用 recalcAll()，只操作目标节点
+    // 依赖视觉效果由 getEffectiveStatus() 在渲染时自动计算
     requestAnimationFrame(draw);
     console.log('[Fusang] 📶 设置状态：'+nodeId+'→'+newStatus);
     return;
@@ -2316,6 +2632,29 @@ window.addEventListener('message',function(event){
 
   console.log('[Fusang] 📨 收到未知消息：',event.data.type);
 });
+
+// ====== 断开处理（心跳超时或主动断开）======
+function handleDisconnect(){
+  parentReady=false;
+  lastExtSignalTime=0;
+  console.log('[Fusang] 🔌 外部信号已断开，3分钟内无信号将进入演示模式');
+  // 更新连接状态指示灯
+  var dot=document.getElementById('live-connect-dot');
+  if(dot) dot.className='live-dot disconnected';
+  var txt=document.getElementById('live-connect-text');
+  if(txt) txt.textContent=i18n[lang].liveDisconnected||'未连接';
+  // 恢复演示/调试按钮
+  var autoBtn=document.getElementById('btn-auto');
+  var intBtn=document.getElementById('btn-interactive');
+  [autoBtn,intBtn].forEach(function(b){
+    if(b){b.disabled=false;b.style.opacity='1';b.style.cursor='pointer';b.style.color='#8b949e';b.style.background='transparent';b.style.boxShadow='none';b.onclick=function(){setMode(this.id.replace('btn-',''));};}
+  });
+  // 接入按钮恢复普通状态
+  var realBtn=document.getElementById('btn-real');
+  if(realBtn){realBtn.style.background='transparent';realBtn.style.color='#8b949e';realBtn.style.fontWeight='normal';realBtn.style.boxShadow='none';}
+  // ★ 断开后进入演示模式（用户要求）
+  setMode('auto');
+}
 
 // ====== 外部信号接入：锁定模式 ======
 function updateModeForConnection(){
@@ -2364,6 +2703,11 @@ function updateModeForConnection(){
 
 // ====== 模式切换 ======
 function setMode(mode){
+  // ★ 接入按钮开关逻辑：已在接入模式时点「接入」→ 退出
+  if(mode==='real' && currentMode==='real'){
+    setMode('interactive');
+    return;
+  }
   // 外部信号已接入时，禁止切换到演示/调试模式
   if(parentReady && mode!=='real'){
     console.log('[Fusang] ⛔ 外部信号接入中，禁止切换到 '+mode+' 模式');
@@ -2373,10 +2717,90 @@ function setMode(mode){
     demoState=-1;
     demoDimOverlay=false;
     demoLitSet={};
-    resetToAllGreen();
     hideNodeMenu();
     cv.style.border='none';
+    // 所有节点进入「未搭建」待激活状态（接入模式核心逻辑）
+    tasks.forEach(function(t){t.status='todo';t.error=null;});
+    recalcAll();
+    // ★ 接入模式空闲计时器：任何操作都会重置此时间
+    accessModeLastActive=performance.now();
+    // ★ 最高优先权：禁用演示/调试按钮
+    var autoBtn=document.getElementById('btn-auto');
+    var intBtn=document.getElementById('btn-interactive');
+    [autoBtn,intBtn].forEach(function(b){
+      if(b){
+        b.disabled=true;
+        b.style.opacity='0.3';
+        b.style.cursor='not-allowed';
+        b.style.color='#484f58';
+        b.style.background='transparent';
+        b.style.boxShadow='none';
+      }
+    });
+    // ★ 接入按钮常亮高亮
+    var realBtn=document.getElementById('btn-real');
+    if(realBtn){
+      realBtn.disabled=false;
+      realBtn.style.cursor='default';
+      realBtn.style.opacity='1';
+      realBtn.style.color='#0d1117';
+      realBtn.style.background='linear-gradient(135deg,#3fb950,#2ea043)';
+      realBtn.style.fontWeight='bold';
+      realBtn.style.boxShadow='0 0 12px rgba(63,185,80,0.5)';
+    }
+    // 展开右侧面板
+    document.getElementById('live-panel').classList.add('open');
+    document.getElementById('live-handle').style.display='block';
+    if(!window._liveInitialized){ initLivePanel(); }
+    // 重置开关状态（每次进入接入模式都重置为 OFF）
+    if(_liveSwitchOn){ _liveSwitchOn=false; }
+    var swBtn=document.getElementById('live-switch-btn');
+    var swTxt=document.getElementById('live-switch-text');
+    if(swBtn) swBtn.className='live-switch off';
+    if(swTxt) swTxt.textContent='OFF';
+    setLiveConnected(false);
+    // 外部信号已提前到达 → 立即显示已连接 + 触发视觉反馈
+    if(parentReady){
+      var dot=document.getElementById('live-connect-dot');
+      if(dot) dot.className='live-dot connected';
+      var txt=document.getElementById('live-connect-text');
+      if(txt) txt.textContent=i18n[lang].liveConnected||'已连接';
+      globalFlashStart=performance.now();
+      globalGlowStart=performance.now();
+    }
+    enableLiveControls(false);
+    resize(); // 重新计算 canvas 宽度，避免树被遮挡
+    console.log('[Fusang] 🔌 接入模式 → 所有节点未搭建，等待信号激活');
+  } else if(currentMode==='real') {
+    // ★ 从接入模式退出：收起右侧面板 + 恢复按钮
+    document.getElementById('live-panel').classList.remove('open');
+    document.getElementById('live-handle').style.display='none';
+    // 恢复演示/调试按钮
+    var autoBtn=document.getElementById('btn-auto');
+    var intBtn=document.getElementById('btn-interactive');
+    [autoBtn,intBtn].forEach(function(b){
+      if(b){
+        b.disabled=false;
+        b.style.opacity='1';
+        b.style.cursor='pointer';
+        b.style.color='#8b949e';
+        b.style.background='transparent';
+        b.style.boxShadow='none';
+        b.onclick=function(){setMode(this.id.replace('btn-',''));};
+      }
+    });
+    // 接入按钮恢复默认样式
+    var realBtn=document.getElementById('btn-real');
+    if(realBtn){
+      realBtn.style.color='#8b949e';
+      realBtn.style.background='transparent';
+      realBtn.style.fontWeight='normal';
+      realBtn.style.boxShadow='none';
+      realBtn.style.cursor='pointer';
+    }
+    resize(); // 恢复 canvas 全宽
   }
+  // 以下为所有模式通用的收尾逻辑
   currentMode=mode;
   modeStep=0;
   modeStartTime=performance.now();
@@ -2533,6 +2957,225 @@ function injectRandomFault(){
   if(currentMode==='interactive'){
     document.getElementById('btn-inject').style.display='none';
   }
+}
+
+// ====== 接入模式控制面板 ======
+var _liveLogEl=null;
+var _liveNodeIds=['entry','config','db','cache','api','auth','frontend','tests','ci'];
+var _liveExternalActive=false;
+var _liveSwitchOn=false;   // 模拟开关状态
+
+function initLivePanel(){
+  window._liveInitialized=true;
+  _liveLogEl=document.getElementById('live-log');
+  populateLiveNodes();
+  // 初始化三段式状态栏：信号已检测到(自模拟)，开关关闭，控制面板禁用
+  setLiveSignalDetected(true);
+  setLiveConnected(false);
+  enableLiveControls(false);
+  liveLog(i18n[lang].liveLogLoaded);
+  liveLog(i18n[lang].liveLogReady);
+  initLiveDragHandle();
+}
+
+function populateLiveNodes(){
+  var sel=document.getElementById('live-node-select');
+  if(!sel) return;
+  sel.innerHTML='';
+  _liveNodeIds.forEach(function(id){
+    var opt=document.createElement('option');
+    opt.value=id;
+    var task=taskById(id);
+    opt.textContent=id+(task?' '+(task.label[lang]||''):'');
+    sel.appendChild(opt);
+  });
+}
+
+function getLiveNode(){
+  var sel=document.getElementById('live-node-select');
+  return sel?sel.value:'entry';
+}
+
+function liveLog(msg){
+  if(!_liveLogEl) _liveLogEl=document.getElementById('live-log');
+  if(!_liveLogEl) return;
+  var time=new Date().toLocaleTimeString(lang==='zh'?'zh-CN':'en-US');
+  _liveLogEl.innerHTML+='['+time+'] '+msg+'\n';
+  _liveLogEl.scrollTop=_liveLogEl.scrollHeight;
+}
+
+function checkLiveAllowed(){
+  if(_liveExternalActive){
+    liveLog('🔌 '+i18n[lang].liveLogExternal);
+    return false;
+  }
+  return true;
+}
+
+// ====== 三段式状态栏 ======
+function setLiveSignalDetected(on){
+  var dot=document.getElementById('live-signal-dot');
+  var sw=document.getElementById('live-switch-btn');
+  if(on){
+    if(dot) dot.className='live-dot signal-on';
+    if(sw) sw.disabled=false;
+  }else{
+    if(dot) dot.className='live-dot signal-off';
+    if(sw){sw.disabled=true;if(_liveSwitchOn)toggleLiveSwitch();}
+  }
+}
+
+function setLiveConnected(on){
+  var dot=document.getElementById('live-connect-dot');
+  if(dot) dot.className=on?'live-dot connected':'live-dot disconnected';
+}
+
+function toggleLiveSwitch(){
+  accessModeLastActive=performance.now(); // 重置空闲计时器
+  if(!_liveSwitchOn){
+    // 开启模拟
+    _liveSwitchOn=true;
+    var btn=document.getElementById('live-switch-btn');
+    var txt=document.getElementById('live-switch-text');
+    if(btn) btn.className='live-switch on';
+    if(txt) txt.textContent='ON';
+    setLiveConnected(true);
+    enableLiveControls(true);
+    liveLog(i18n[lang].liveLogSwitchOn);
+  }else{
+    // 关闭模拟
+    _liveSwitchOn=false;
+    var btn=document.getElementById('live-switch-btn');
+    var txt=document.getElementById('live-switch-text');
+    if(btn) btn.className='live-switch off';
+    if(txt) txt.textContent='OFF';
+    setLiveConnected(false);
+    enableLiveControls(false);
+    liveLog(i18n[lang].liveLogSwitchOff);
+  }
+}
+
+function enableLiveControls(on){
+  var ids=['live-btn-build','live-btn-fault','live-btn-ai','live-btn-manual'];
+  ids.forEach(function(id){
+    var b=document.getElementById(id);
+    if(!b)return;
+    b.disabled=!on;
+    b.style.opacity=on?'1':'0.35';
+    b.style.cursor=on?'pointer':'not-allowed';
+  });
+}
+
+function liveBuild(){
+  accessModeLastActive=performance.now(); // 重置空闲计时器
+  if(!checkLiveAllowed()) return;
+  var nid=getLiveNode();
+  var task=taskById(nid);
+  if(!task){liveLog(i18n[lang].liveLogNodeNotFound+nid);return;}
+  // 故障节点不允许搭建，需先修复
+  if(task.status==='blocked'){liveLog(i18n[lang].liveLogNodeFaulted+nid);return;}
+  // 已搭建节点无需重复搭建
+  if(task.status==='done'){liveLog(i18n[lang].liveLogNodeAlreadyDone+nid);return;}
+  // 接入模式：只搭建当前节点，不自动传导下游（逐级搭建）
+  var oldSt=task.status;
+  task.status='done';task.error=null;
+  sendStatusChange(nid,oldSt,'done');
+  liveLog(i18n[lang].liveLogBuild+nid);
+  requestAnimationFrame(draw);
+}
+
+function liveFault(){
+  accessModeLastActive=performance.now(); // 重置空闲计时器
+  if(!checkLiveAllowed()) return;
+  var nid=getLiveNode();
+  var task=taskById(nid);
+  if(!task){liveLog(i18n[lang].liveLogNodeNotFound+nid);return;}
+  if(task.status==='todo'||task.status==='waiting'){liveLog(i18n[lang].liveLogNodeNotBuilt+nid);return;}
+  var oldSt=task.status;
+  task.status='blocked';
+  task.error={message:{zh:'注入故障',en:'Injected fault'},file:'',line:1,callChain:[]};
+  sendStatusChange(nid,oldSt,'blocked');
+  // 接入模式：不调用 recalcAll()，只操作目标节点
+  // 下游节点的等待/阻塞视觉效果由 getEffectiveStatus() 渲染时自动计算
+  liveLog(i18n[lang].liveLogFault+nid);
+  requestAnimationFrame(draw);
+}
+
+function liveAiFix(){
+  accessModeLastActive=performance.now(); // 重置空闲计时器
+  if(!checkLiveAllowed()) return;
+  var nid=getLiveNode();
+  var task=taskById(nid);
+  if(!task){liveLog(i18n[lang].liveLogNodeNotFound+nid);return;}
+  if(task.status!=='blocked'){liveLog(i18n[lang].liveLogNodeNotFaulty+nid);return;}
+  startFixAnimation(nid,'ai');
+  liveLog(i18n[lang].liveLogAiFix+nid);
+}
+
+function liveManualFix(){
+  accessModeLastActive=performance.now(); // 重置空闲计时器
+  if(!checkLiveAllowed()) return;
+  var nid=getLiveNode();
+  var task=taskById(nid);
+  if(!task){liveLog(i18n[lang].liveLogNodeNotFound+nid);return;}
+  if(task.status!=='blocked'){liveLog(i18n[lang].liveLogNodeNotFaulty+nid);return;}
+  startFixAnimation(nid,'manual');
+  liveLog(i18n[lang].liveLogManualFix+nid);
+}
+
+function liveCopyLog(){
+  if(!_liveLogEl||!_liveLogEl.textContent){liveLog(i18n[lang].liveLogEmpty);return;}
+  navigator.clipboard.writeText(_liveLogEl.textContent).then(function(){
+    liveLog(i18n[lang].liveLogCopied+_liveLogEl.textContent.length+' chars)');
+  }).catch(function(){
+    var ta=document.createElement('textarea');
+    ta.value=_liveLogEl.textContent;
+    ta.style.position='fixed';ta.style.left='-9999px';
+    document.body.appendChild(ta);ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    liveLog(i18n[lang].liveLogCopiedFallback);
+  });
+}
+
+function liveClearLog(){
+  if(_liveLogEl) _liveLogEl.innerHTML='';
+  liveLog(i18n[lang].liveLogCleared);
+}
+
+function liveToggleHelp(){
+  var body=document.getElementById('live-help-body');
+  var arrow=document.getElementById('live-help-arrow');
+  if(body.style.display==='none'){
+    body.style.display='block';arrow.textContent='▼';
+  } else {
+    body.style.display='none';arrow.textContent='▶';
+  }
+}
+
+// 拖拽手柄
+function initLiveDragHandle(){
+  var handle=document.getElementById('live-handle');
+  var panel=document.getElementById('live-panel');
+  var dragging=false;
+  handle.addEventListener('mousedown',function(e){
+    e.preventDefault();dragging=true;
+    handle.classList.add('dragging');
+    document.body.style.cursor='col-resize';document.body.style.userSelect='none';
+  });
+  document.addEventListener('mousemove',function(e){
+    if(!dragging) return;
+    var w=document.documentElement.clientWidth-e.clientX;
+    w=Math.max(200,Math.min(600,w));
+    panel.style.width=w+'px';handle.style.right=w+'px';
+    resize(); // 拖拽时实时重绘树
+  });
+  document.addEventListener('mouseup',function(){
+    if(!dragging) return;
+    dragging=false;handle.classList.remove('dragging');
+    document.body.style.cursor='';document.body.style.userSelect='';
+    resize(); // 拖拽结束最终确认
+  });
 }
 
 resize();
