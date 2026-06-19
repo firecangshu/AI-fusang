@@ -69,10 +69,6 @@ body{font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;backgroun
       <span class="status disconnected" id="connect-dot"></span>
       <span class="stage-label" id="stage-connected">连接</span>
     </div>
-    <div class="stage" style="margin-left:4px;">
-      <button onclick="setLang('zh')" id="tbtn-zh" style="background:rgba(33,38,45,0.92);color:#58a6ff;border:1px solid #58a6ff;border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;">中文</button>
-      <button onclick="setLang('en')" id="tbtn-en" style="background:rgba(33,38,45,0.92);color:#8b949e;border:1px solid #30363d;border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;">EN</button>
-    </div>
   </div>
 </div>
 
@@ -114,10 +110,10 @@ body{font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;backgroun
       <h3 onclick="toggleHelp()" style="padding:8px 12px;"><span class="arrow" id="help-arrow">▶</span> <span id="help-title-text">ℹ️ 使用说明</span></h3>
       <div id="help-body" style="display:none;padding:0 12px 8px 20px;">
         <ul style="font-size:11px;color:#8b949e;line-height:1.5;">
-          <li id="help-1">左侧是扶桑树 iframe</li>
-          <li id="help-2">点击节点 → 观察消息日志</li>
-          <li id="help-3">外界信号加载完成后会自动发送 READY</li>
-          <li id="help-4">扶桑树加载完成后会自动发送 READY</li>
+          <li id="help-1">1. 打开信号开关 → 控制面板解锁</li>
+          <li id="help-2">2. 依赖传导：上游阻塞 → 下游自动等待（红变紫）</li>
+          <li id="help-3">3. 上游修复 → 下游自动接通（依赖全绿自动传导）</li>
+          <li id="help-4">4. 拖拽 ║ 手柄调宽 / 📋复制日志分析</li>
         </ul>
       </div>
     </div>
@@ -160,10 +156,10 @@ var i18n={
     btnCopy:'[📋复制]',
     btnClear:'[🗑️清空]',
     helpTitle:'ℹ️ 使用说明',
-    help1:'左侧是扶桑树 iframe',
-    help2:'点击节点 → 观察消息日志',
-    help3:'外界信号加载完成后会自动发送 READY',
-    help4:'扶桑树加载完成后会自动发送 READY',
+    help1:'1. 打开信号开关 → 控制面板解锁',
+    help2:'2. 依赖传导：上游阻塞 → 下游自动等待（红变紫）',
+    help3:'3. 上游修复 → 下游自动接通（依赖全绿自动传导）',
+    help4:'4. 拖拽 ║ 手柄调宽 / 📋复制日志分析',
     // log 消息
     logCleared:'日志已清空',
     logEmpty:'⚠️ 日志为空，无需复制',
@@ -186,6 +182,7 @@ var i18n={
     logLoaded:'测试父窗口已加载',
     logLoading:'等待扶桑树 iframe 加载...',
     logNodesLoaded:'节点列表已加载 (',
+    logRecvMessage:'📨 收到消息：',
     statusLabels:{done:'🟢接通',blocked:'🔴故障','in-progress':'🔵进行中',todo:'⚫待办'},
     nodeLabels:{entry:'entry 程序入口',config:'config 配置',db:'db 数据库',cache:'cache 缓存',api:'api API服务',auth:'auth 认证',frontend:'frontend 前端',tests:'tests 测试',ci:'ci 部署'}
   },
@@ -207,10 +204,10 @@ var i18n={
     btnCopy:'[📋Copy]',
     btnClear:'[🗑️Clear]',
     helpTitle:'ℹ️ Help',
-    help1:'Left: Fusang tree iframe',
-    help2:'Click a node → watch the log',
-    help3:'External signal sends READY when loaded',
-    help4:'Fusang tree sends READY when loaded',
+    help1:'1. Turn switch ON → panel unlocked',
+    help2:'2. Dep chain: upstream blocked → downstream waiting (red→purple)',
+    help3:'3. Upstream fixed → downstream auto-done (all deps green auto-propagate)',
+    help4:'4. Drag ║ handle / 📋Copy log for analysis',
     logCleared:'Log cleared',
     logEmpty:'⚠️ Log is empty, nothing to copy',
     logCopied:'✅ Log copied to clipboard (',
@@ -232,6 +229,7 @@ var i18n={
     logLoaded:'Test parent window loaded',
     logLoading:'Waiting for Fusang tree iframe...',
     logNodesLoaded:'Node list loaded (',
+    logRecvMessage:'📨 Received message: ',
     statusLabels:{done:'🟢Done',blocked:'🔴Blocked','in-progress':'🔵In Progress',todo:'⚫Todo'},
     nodeLabels:{entry:'entry Entry Point',config:'config Config',db:'db Database',cache:'cache Cache',api:'api API',auth:'auth Auth',frontend:'frontend Frontend',tests:'tests Tests',ci:'ci CI/CD'}
   }
@@ -248,10 +246,6 @@ function setLang(l){
   tCache=i18n[l];
   applyLang();
   localStorage.setItem('fusang-lang',l);
-  // 语言按钮样式
-  var bZh=document.getElementById('tbtn-zh'),bEn=document.getElementById('tbtn-en');
-  if(bZh){bZh.style.borderColor=l==='zh'?'#58a6ff':'#30363d';bZh.style.color=l==='zh'?'#58a6ff':'#8b949e';}
-  if(bEn){bEn.style.borderColor=l==='en'?'#58a6ff':'#30363d';bEn.style.color=l==='en'?'#58a6ff':'#8b949e';}
 }
 function applyLang(){
   document.title=t('title')+' - '+t('subtitle');
@@ -281,10 +275,19 @@ function applyLang(){
 }
 // 初始化语言
 lang=detectLang();
-setLang(lang);
 
-// 动态设置 iframe src，加时间戳防缓存
+// 先加载 iframe（独立于 i18n，避免 setLang 异常阻塞 iframe）
 iframe.src = 'index.html?_cb=' + Date.now();
+console.log('[test-parent] iframe src set to:', iframe.src);
+// 检查 iframe 加载事件
+iframe.onload = function(){ console.log('[test-parent] iframe loaded successfully'); };
+
+// 再初始化语言（有异常也不影响 iframe）
+try {
+  setLang(lang);
+} catch(e) {
+  console.error('[test-parent] setLang error:', e);
+}
 
 // 日志记录
 function log(msg) {
@@ -446,7 +449,7 @@ function sendHighlight(){
 
 // 监听扶桑树消息
 window.addEventListener('message', function(event) {
-  log('📨 收到消息：' + JSON.stringify(event.data, null, 2));
+  log(t('logRecvMessage') + JSON.stringify(event.data, null, 2));
 
   if (event.data.type === 'FUSANG_NODE_CLICK') {
     log(t('logNodeClick') + event.data.nodeId);
@@ -474,6 +477,13 @@ populateNodes();
 log(t('logNodesLoaded')+allNodeIds.length+' '+ (lang==='zh'?'个)':')'));
 // 初始状态：控制面板禁用（等开关打开后才可用）
 enableControls(false);
+
+// 监听 localStorage 变化（扶桑树切换语言时自动同步）
+window.addEventListener('storage', function(e) {
+  if(e.key==='fusang-lang' && e.newValue && e.newValue!==lang){
+    try { setLang(e.newValue); } catch(ex) { console.error('[test-parent] storage sync error:', ex); }
+  }
+});
 
 // 使用说明折叠/展开
 function toggleHelp(){
