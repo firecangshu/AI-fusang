@@ -7,13 +7,20 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;background:#1a1a2e;color:#e0e0e0;height:100vh;display:flex;flex-direction:column;}
-.header{background:#16213e;padding:12px 20px;border-bottom:1px solid #30363d;display:flex;align-items:center;gap:20px;}
-.header h1{font-size:18px;color:#00d4ff;margin:0;white-space:nowrap;}
-.header .subtitle{font-size:12px;color:#8b949e;white-space:nowrap;}
+.header{background:#16213e;padding:8px 12px;border-bottom:1px solid #30363d;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.header h1{font-size:15px;color:#00d4ff;margin:0;white-space:nowrap;flex-shrink:0;}
+.header .subtitle{font-size:11px;color:#8b949e;white-space:nowrap;flex-shrink:0;}
 .main{display:flex;flex:1;overflow:hidden;}
 .left{flex:1;position:relative;}
 .left iframe{width:100%;height:100%;border:none;}
-.right{width:220px;background:#0d1117;border-left:1px solid #30363d;display:flex;flex-direction:column;min-width:0;}
+.right{width:220px;flex:none;background:#0d1117;border-left:1px solid #30363d;display:flex;flex-direction:column;min-width:0;}
+/* 拖拽手柄 — 宽点击区域，始终可见圆点 */
+.resize-handle{width:10px;cursor:col-resize;background:transparent;position:relative;flex:none;z-index:10;transition:background 0.15s;margin:0 -2px;}
+.resize-handle::before{content:'';position:absolute;inset:0 -4px;cursor:col-resize;}
+.resize-handle:hover{background:#1a2332;}
+.resize-handle.dragging{background:#30363d;}
+.resize-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#4a5568;width:2px;height:36px;border-radius:2px;opacity:0.35;transition:opacity 0.2s,width 0.2s;}
+.resize-handle:hover::after,.resize-handle.dragging::after{opacity:0.8;width:3px;}
 .panel{padding:8px 12px;border-bottom:1px solid #30363d;}
 .panel h3{font-size:12px;color:#58a6ff;margin:0 0 6px 0;cursor:pointer;display:flex;align-items:center;gap:4px;user-select:none;}
 .panel h3 .arrow{font-size:10px;transition:transform 0.15s;}
@@ -31,8 +38,8 @@ body{font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;backgroun
 .status.connected{background:#3fb950;box-shadow:0 0 6px rgba(63,185,80,0.4);}
 .status.disconnected{background:#6e7681;}
 /* 工业风状态栏 */
-.status-bar{display:flex;align-items:center;gap:6px;font-size:11px;white-space:nowrap;}
-.status-bar .stage{display:flex;align-items:center;gap:6px;background:rgba(22,27,34,0.6);border:1px solid #30363d;border-radius:4px;padding:3px 10px;}
+.status-bar{display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap;flex-wrap:wrap;}
+.status-bar .stage{display:flex;align-items:center;gap:4px;background:rgba(22,27,34,0.6);border:1px solid #30363d;border-radius:4px;padding:2px 6px;}
 .status-bar .stage-label{color:#8b949e;font-size:10px;white-space:nowrap;}
 /* 工业风开关 */
 .switch-btn{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:10px;border:1px solid #30363d;transition:all 0.15s;font-family:inherit;white-space:nowrap;}
@@ -45,22 +52,26 @@ body{font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;backgroun
 <body>
 
 <div class="header">
-  <h1>🎯 AI-Fusang 测试父窗口</h1>
-  <span class="subtitle">V4 postMessage 集成测试</span>
+  <h1 id="page-title">🎯 AI-Fusang 测试父窗口</h1>
+  <span class="subtitle" id="page-subtitle">V4 postMessage 集成测试</span>
   <div class="status-bar" style="margin-left:auto;">
     <div class="stage">
       <span class="status signal-off" id="detect-dot"></span>
-      <span class="stage-label">信号</span>
+      <span class="stage-label" id="stage-signal">信号</span>
     </div>
     <div class="stage">
-      <span class="stage-label">外接信号</span>
+      <span class="stage-label" id="stage-external">外接信号</span>
       <button class="switch-btn off" id="switch-btn" onclick="toggleSwitch()" disabled>
         <span class="toggle-text" id="switch-text">OFF</span>
       </button>
     </div>
     <div class="stage">
       <span class="status disconnected" id="connect-dot"></span>
-      <span class="stage-label">连接</span>
+      <span class="stage-label" id="stage-connected">连接</span>
+    </div>
+    <div class="stage" style="margin-left:4px;">
+      <button onclick="setLang('zh')" id="tbtn-zh" style="background:rgba(33,38,45,0.92);color:#58a6ff;border:1px solid #58a6ff;border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;">中文</button>
+      <button onclick="setLang('en')" id="tbtn-en" style="background:rgba(33,38,45,0.92);color:#8b949e;border:1px solid #30363d;border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;">EN</button>
     </div>
   </div>
 </div>
@@ -70,41 +81,43 @@ body{font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;backgroun
     <iframe id="fusang-iframe"></iframe>
   </div>
 
+  <div class="resize-handle" id="resize-handle"></div>
+
   <div class="right">
     <div class="panel">
-      <h3>🎮 控制面板</h3>
+      <h3 id="panel-title">🎮 控制面板</h3>
       <!-- 节点选择 -->
       <div style="margin-bottom:6px;display:flex;gap:4px;align-items:center;">
-        <span style="font-size:10px;color:#8b949e;white-space:nowrap;">节点</span>
+        <span style="font-size:10px;color:#8b949e;white-space:nowrap;" id="node-label">节点</span>
         <select id="node-select" style="flex:1;background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:3px;padding:2px 4px;font-size:11px;font-family:inherit;"></select>
       </div>
       <!-- 搭建/故障 -->
-      <div style="margin-bottom:4px;font-size:10px;color:#58a6ff;">─ 搭建 ─</div>
+      <div style="margin-bottom:4px;font-size:10px;color:#58a6ff;" id="section-build">─ 搭建 ─</div>
       <div id="build-btns" style="margin-bottom:6px;display:flex;gap:3px;">
-        <button class="btn" onclick="sendSetStatus('done')" style="font-size:10px;background:#2ea043;color:#fff;border-color:#2ea043;">🟢搭建</button>
-        <button class="btn" onclick="sendInjectFault()" style="font-size:10px;background:#e53935;color:#fff;border-color:#e53935;">🔴故障</button>
+        <button class="btn" id="btn-build" onclick="sendSetStatus('done')" style="font-size:10px;background:#2ea043;color:#fff;border-color:#2ea043;">🟢搭建</button>
+        <button class="btn" id="btn-fault" onclick="sendInjectFault()" style="font-size:10px;background:#e53935;color:#fff;border-color:#e53935;">🔴故障</button>
       </div>
       <!-- 修复 -->
-      <div style="margin-bottom:4px;font-size:10px;color:#58a6ff;">─ 修复 ─</div>
+      <div style="margin-bottom:4px;font-size:10px;color:#58a6ff;" id="section-fix">─ 修复 ─</div>
       <div id="fix-btns" style="margin-bottom:6px;display:flex;gap:3px;">
-        <button class="btn" onclick="sendAIFix()" style="font-size:10px;background:#00b365;color:#fff;border-color:#00b365;">🤖AI修复</button>
-        <button class="btn" onclick="sendManualFix()" style="font-size:10px;background:#f5a623;color:#fff;border-color:#f5a623;">✋人工修复</button>
+        <button class="btn" id="btn-ai" onclick="sendAIFix()" style="font-size:10px;background:#00b365;color:#fff;border-color:#00b365;">🤖AI修复</button>
+        <button class="btn" id="btn-manual" onclick="sendManualFix()" style="font-size:10px;background:#f5a623;color:#fff;border-color:#f5a623;">✋人工修复</button>
       </div>
     </div>
 
     <div class="panel" style="flex:1;display:flex;flex-direction:column;min-height:0;">
-      <h3>📋 消息日志 <span style="float:right;font-size:10px;color:#8b949e;cursor:pointer;" onclick="clearLog()">[🗑️清空]</span></h3>
+      <h3><span id="log-title-text">📋 消息日志</span> <span style="float:right;font-size:10px;color:#8b949e;cursor:pointer;" id="btn-copy-log" onclick="copyLog()">[📋复制]</span><span style="float:right;font-size:10px;color:#8b949e;cursor:pointer;margin-right:8px;" id="btn-clear-log" onclick="clearLog()">[🗑️清空]</span></h3>
       <div class="log" id="message-log"></div>
     </div>
 
     <div class="panel" style="padding:0;">
-      <h3 onclick="toggleHelp()" style="padding:8px 12px;"><span class="arrow" id="help-arrow">▶</span> ℹ️ 使用说明</h3>
+      <h3 onclick="toggleHelp()" style="padding:8px 12px;"><span class="arrow" id="help-arrow">▶</span> <span id="help-title-text">ℹ️ 使用说明</span></h3>
       <div id="help-body" style="display:none;padding:0 12px 8px 20px;">
         <ul style="font-size:11px;color:#8b949e;line-height:1.5;">
-          <li>左侧是扶桑树 iframe</li>
-          <li>点击节点 → 观察消息日志</li>
-          <li>点「高亮」按钮 → 观察扶桑树节点闪烁</li>
-          <li>扶桑树加载完成后会自动发送 READY</li>
+          <li id="help-1">左侧是扶桑树 iframe</li>
+          <li id="help-2">点击节点 → 观察消息日志</li>
+          <li id="help-3">外界信号加载完成后会自动发送 READY</li>
+          <li id="help-4">扶桑树加载完成后会自动发送 READY</li>
         </ul>
       </div>
     </div>
@@ -123,6 +136,153 @@ var SECRET = 'fusang-2026';
 var signalDetected = false;  // 是否检测到扶桑树信号
 var switchOn = false;        // 外接信号开关是否打开
 
+// ====== 中英双语 i18n ======
+var lang='zh';
+var tCache={};
+function t(key){return tCache[key]||key;}
+function tr(key,lang2){var m=i18n[lang2];return m?m[key]||key:key;}
+var i18n={
+  zh:{
+    title:'🎯 AI-Fusang 测试父窗口',
+    subtitle:'V4 postMessage 集成测试',
+    stageSignal:'信号',
+    stageExternal:'外接信号',
+    stageConnected:'连接',
+    panelControl:'🎮 控制面板',
+    node:'节点',
+    sectionBuild:'─ 搭建 ─',
+    btnBuild:'🟢搭建',
+    btnFault:'🔴故障',
+    sectionFix:'─ 修复 ─',
+    btnAiFix:'🤖AI修复',
+    btnManualFix:'✋人工修复',
+    logTitle:'📋 消息日志',
+    btnCopy:'[📋复制]',
+    btnClear:'[🗑️清空]',
+    helpTitle:'ℹ️ 使用说明',
+    help1:'左侧是扶桑树 iframe',
+    help2:'点击节点 → 观察消息日志',
+    help3:'外界信号加载完成后会自动发送 READY',
+    help4:'扶桑树加载完成后会自动发送 READY',
+    // log 消息
+    logCleared:'日志已清空',
+    logEmpty:'⚠️ 日志为空，无需复制',
+    logCopied:'✅ 日志已复制到剪贴板（共 ',
+    logCopiedFallback:'✅ 日志已复制到剪贴板（fallback）',
+    logSignalDetected:'  → 🔍 信号检测：扶桑树已就绪，等待用户开启外接信号开关',
+    logSwitchOn:'🔛 外接信号开关 → ON（已向扶桑树发送 READY）',
+    logSwitchOff:'🔛 外接信号开关 → OFF（已通知扶桑树断开）',
+    logConnected:'  → ✅ 与扶桑树已连接',
+    logDisconnected:'  → ❌ 与扶桑树已断开',
+    logSetStatus:'✉️ 设置状态 ',
+    logInjectFault:'✉️ 注入故障：',
+    logAiFix:'✉️ AI修复：',
+    logManualFix:'✉️ 人工修复：',
+    logHighlight:'✉️ 高亮节点：',
+    logNodeClick:'  → 节点点击：',
+    logCodeLocation:'  → 代码位置：',
+    logReady:'  → 🟢 检测到扶桑树就绪信号，等待用户开启外接信号开关',
+    logStatusChange:'  → 📊 状态变更：',
+    logLoaded:'测试父窗口已加载',
+    logLoading:'等待扶桑树 iframe 加载...',
+    logNodesLoaded:'节点列表已加载 (',
+    statusLabels:{done:'🟢接通',blocked:'🔴故障','in-progress':'🔵进行中',todo:'⚫待办'},
+    nodeLabels:{entry:'entry 程序入口',config:'config 配置',db:'db 数据库',cache:'cache 缓存',api:'api API服务',auth:'auth 认证',frontend:'frontend 前端',tests:'tests 测试',ci:'ci 部署'}
+  },
+  en:{
+    title:'🎯 AI-Fusang Test Parent',
+    subtitle:'V4 postMessage Integration Test',
+    stageSignal:'Signal',
+    stageExternal:'External',
+    stageConnected:'Link',
+    panelControl:'🎮 Control Panel',
+    node:'Node',
+    sectionBuild:'─ Build ─',
+    btnBuild:'🟢Build',
+    btnFault:'🔴Fault',
+    sectionFix:'─ Fix ─',
+    btnAiFix:'🤖AI Fix',
+    btnManualFix:'✋Manual Fix',
+    logTitle:'📋 Message Log',
+    btnCopy:'[📋Copy]',
+    btnClear:'[🗑️Clear]',
+    helpTitle:'ℹ️ Help',
+    help1:'Left: Fusang tree iframe',
+    help2:'Click a node → watch the log',
+    help3:'External signal sends READY when loaded',
+    help4:'Fusang tree sends READY when loaded',
+    logCleared:'Log cleared',
+    logEmpty:'⚠️ Log is empty, nothing to copy',
+    logCopied:'✅ Log copied to clipboard (',
+    logCopiedFallback:'✅ Log copied to clipboard (fallback)',
+    logSignalDetected:'  → 🔍 Signal detected: Fusang tree ready, awaiting external switch',
+    logSwitchOn:'🔛 External switch → ON (READY sent to Fusang)',
+    logSwitchOff:'🔛 External switch → OFF (DISCONNECT sent to Fusang)',
+    logConnected:'  → ✅ Connected to Fusang tree',
+    logDisconnected:'  → ❌ Disconnected from Fusang tree',
+    logSetStatus:'✉️ Set status ',
+    logInjectFault:'✉️ Inject fault: ',
+    logAiFix:'✉️ AI Fix: ',
+    logManualFix:'✉️ Manual Fix: ',
+    logHighlight:'✉️ Highlight node: ',
+    logNodeClick:'  → Node clicked: ',
+    logCodeLocation:'  → Code location: ',
+    logReady:'  → 🟢 Fusang ready signal detected, awaiting external switch',
+    logStatusChange:'  → 📊 Status change: ',
+    logLoaded:'Test parent window loaded',
+    logLoading:'Waiting for Fusang tree iframe...',
+    logNodesLoaded:'Node list loaded (',
+    statusLabels:{done:'🟢Done',blocked:'🔴Blocked','in-progress':'🔵In Progress',todo:'⚫Todo'},
+    nodeLabels:{entry:'entry Entry Point',config:'config Config',db:'db Database',cache:'cache Cache',api:'api API',auth:'auth Auth',frontend:'frontend Frontend',tests:'tests Tests',ci:'ci CI/CD'}
+  }
+};
+// 语言检测与切换
+function detectLang(){
+  var saved=localStorage.getItem('fusang-lang');
+  if(saved==='zh'||saved==='en') return saved;
+  var navLang=(navigator.language||navigator.userLanguage||'zh').toLowerCase();
+  return navLang.startsWith('zh')?'zh':'en';
+}
+function setLang(l){
+  lang=l;
+  tCache=i18n[l];
+  applyLang();
+  localStorage.setItem('fusang-lang',l);
+  // 语言按钮样式
+  var bZh=document.getElementById('tbtn-zh'),bEn=document.getElementById('tbtn-en');
+  if(bZh){bZh.style.borderColor=l==='zh'?'#58a6ff':'#30363d';bZh.style.color=l==='zh'?'#58a6ff':'#8b949e';}
+  if(bEn){bEn.style.borderColor=l==='en'?'#58a6ff':'#30363d';bEn.style.color=l==='en'?'#58a6ff':'#8b949e';}
+}
+function applyLang(){
+  document.title=t('title')+' - '+t('subtitle');
+  document.getElementById('page-title').textContent=t('title');
+  document.getElementById('page-subtitle').textContent=t('subtitle');
+  document.getElementById('stage-signal').textContent=t('stageSignal');
+  document.getElementById('stage-external').textContent=t('stageExternal');
+  document.getElementById('stage-connected').textContent=t('stageConnected');
+  document.getElementById('panel-title').textContent=t('panelControl');
+  document.getElementById('node-label').textContent=t('node');
+  document.getElementById('section-build').textContent=t('sectionBuild');
+  document.getElementById('btn-build').textContent=t('btnBuild');
+  document.getElementById('btn-fault').textContent=t('btnFault');
+  document.getElementById('section-fix').textContent=t('sectionFix');
+  document.getElementById('btn-ai').textContent=t('btnAiFix');
+  document.getElementById('btn-manual').textContent=t('btnManualFix');
+  document.getElementById('log-title-text').textContent=t('logTitle');
+  document.getElementById('btn-copy-log').textContent=t('btnCopy');
+  document.getElementById('btn-clear-log').textContent=t('btnClear');
+  document.getElementById('help-title-text').textContent=t('helpTitle');
+  document.getElementById('help-1').textContent=t('help1');
+  document.getElementById('help-2').textContent=t('help2');
+  document.getElementById('help-3').textContent=t('help3');
+  document.getElementById('help-4').textContent=t('help4');
+  // 刷新节点下拉
+  populateNodes();
+}
+// 初始化语言
+lang=detectLang();
+setLang(lang);
+
 // 动态设置 iframe src，加时间戳防缓存
 iframe.src = 'index.html?_cb=' + Date.now();
 
@@ -135,7 +295,29 @@ function log(msg) {
 
 function clearLog() {
   logEl.innerHTML = '';
-  log('日志已清空');
+  log(t('logCleared'));
+}
+
+function copyLog() {
+  var text = logEl.textContent || logEl.innerText;
+  if (!text || text.trim() === '') {
+    log(t('logEmpty'));
+    return;
+  }
+  navigator.clipboard.writeText(text).then(function(){
+    log(t('logCopied') + text.length + ' ' + (lang==='zh'?'字符':'chars') + '）');
+  }).catch(function(){
+    // fallback
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    log(t('logCopiedFallback'));
+  });
 }
 
 // ====== 三段式状态管理 ======
@@ -147,7 +329,7 @@ function setSignalDetected(detected) {
     detectDot.className='status signal-on';
     // 有信号了 → 开关可用
     switchBtn.disabled=false;
-    log('  → 🔍 信号检测：扶桑树已就绪，等待用户开启外接信号开关');
+    log(t('logSignalDetected'));
   }else{
     signalDetected=false;
     detectDot.className='status signal-off';
@@ -165,7 +347,7 @@ function toggleSwitch() {
     switchBtn.className='switch-btn on';
     switchText.textContent='ON';
     iframe.contentWindow.postMessage({type:'FUSANG_READY',secret:SECRET},'*');
-    log('🔛 外接信号开关 → ON（已向扶桑树发送 READY）');
+    log(t('logSwitchOn'));
     setConnected(true);
     // 允许控制面板其他按钮操作
     enableControls(true);
@@ -174,7 +356,7 @@ function toggleSwitch() {
     switchBtn.className='switch-btn off';
     switchText.textContent='OFF';
     iframe.contentWindow.postMessage({type:'FUSANG_DISCONNECT',secret:SECRET},'*');
-    log('🔛 外接信号开关 → OFF（已通知扶桑树断开）');
+    log(t('logSwitchOff'));
     setConnected(false);
     enableControls(false);
   }
@@ -184,10 +366,10 @@ function toggleSwitch() {
 function setConnected(conn) {
   if(conn){
     connectDot.className='status connected';
-    log('  → ✅ 与扶桑树已连接');
+    log(t('logConnected'));
   }else{
     connectDot.className='status disconnected';
-    log('  → ❌ 与扶桑树已断开');
+    log(t('logDisconnected'));
   }
 }
 
@@ -202,7 +384,7 @@ var allNodeIds=['entry','config','db','cache','api','auth','frontend','tests','c
 function populateNodes(){
   var sel=document.getElementById('node-select');
   if(!sel) return;
-  var labels={'entry':'entry 程序入口','config':'config 配置','db':'db 数据库','cache':'cache 缓存','api':'api API服务','auth':'auth 认证','frontend':'frontend 前端','tests':'tests 测试','ci':'ci 部署'};
+  var labels=t('nodeLabels');
   sel.innerHTML='';
   allNodeIds.forEach(function(id){
     var opt=document.createElement('option');
@@ -229,37 +411,37 @@ function enableControls(on){
 // 通用：发送 FUSANG_SET_STATUS
 function sendSetStatus(status){
   var nodeId=getSelectedNode();
-  var statusLabels={'done':'🟢接通','blocked':'🔴故障','in-progress':'🔵进行中','todo':'⚫待办'};
+  var sl=t('statusLabels');
   iframe.contentWindow.postMessage({type:'FUSANG_SET_STATUS',nodeId:nodeId,status:status,secret:SECRET},'*');
-  log('✉️ 设置状态 '+nodeId+' → '+ (statusLabels[status]||status));
+  log(t('logSetStatus')+nodeId+' → '+(sl[status]||status));
 }
 
 // 发送 FUSANG_INJECT_FAULT
 function sendInjectFault(){
   var nodeId=getSelectedNode();
   iframe.contentWindow.postMessage({type:'FUSANG_INJECT_FAULT',nodeId:nodeId,secret:SECRET},'*');
-  log('✉️ 注入故障：'+nodeId);
+  log(t('logInjectFault')+nodeId);
 }
 
 // 发送 FUSANG_AI_FIX
 function sendAIFix(){
   var nodeId=getSelectedNode();
   iframe.contentWindow.postMessage({type:'FUSANG_AI_FIX',nodeId:nodeId,secret:SECRET},'*');
-  log('✉️ AI修复：'+nodeId);
+  log(t('logAiFix')+nodeId);
 }
 
 // 发送 FUSANG_MANUAL_FIX
 function sendManualFix(){
   var nodeId=getSelectedNode();
   iframe.contentWindow.postMessage({type:'FUSANG_MANUAL_FIX',nodeId:nodeId,secret:SECRET},'*');
-  log('✉️ 人工修复：'+nodeId);
+  log(t('logManualFix')+nodeId);
 }
 
 // 发送 FUSANG_HIGHLIGHT_NODE
 function sendHighlight(){
   var nodeId=getSelectedNode();
   iframe.contentWindow.postMessage({type:'FUSANG_HIGHLIGHT_NODE',nodeId:nodeId,secret:SECRET},'*');
-  log('✉️ 高亮节点：'+nodeId);
+  log(t('logHighlight')+nodeId);
 }
 
 // 监听扶桑树消息
@@ -267,25 +449,29 @@ window.addEventListener('message', function(event) {
   log('📨 收到消息：' + JSON.stringify(event.data, null, 2));
 
   if (event.data.type === 'FUSANG_NODE_CLICK') {
-    log('  → 节点点击：' + event.data.nodeId);
+    log(t('logNodeClick') + event.data.nodeId);
     if (event.data.codeLocation) {
-      log('  → 代码位置：' + event.data.codeLocation.file + ':' + event.data.codeLocation.line);
+      log(t('logCodeLocation') + event.data.codeLocation.file + ':' + event.data.codeLocation.line);
     }
   }
 
   if (event.data.type === 'FUSANG_READY') {
     // 只点亮信号检测器，不自动转发！等用户开关
     setSignalDetected(true);
-    log('  → 🟢 检测到扶桑树就绪信号，等待用户开启外接信号开关');
+    log(t('logReady'));
+  }
+
+  if (event.data.type === 'FUSANG_STATUS_CHANGE') {
+    log(t('logStatusChange') + event.data.nodeId + ' ' + event.data.oldStatus + '\u2192' + event.data.newStatus);
   }
 });
 
 // 页面加载完成
-log('测试父窗口已加载');
-log('等待扶桑树 iframe 加载...');
+log(t('logLoaded'));
+log(t('logLoading'));
 // 填充节点下拉
 populateNodes();
-log('节点列表已加载 ('+allNodeIds.length+' 个)');
+log(t('logNodesLoaded')+allNodeIds.length+' '+ (lang==='zh'?'个)':')'));
 // 初始状态：控制面板禁用（等开关打开后才可用）
 enableControls(false);
 
@@ -301,6 +487,38 @@ function toggleHelp(){
     arrow.classList.remove('open');
   }
 }
+
+// ====== 右侧面板拖拽手柄 ======
+(function(){
+  var handle = document.getElementById('resize-handle');
+  var right = document.querySelector('.right');
+  var isDragging = false;
+
+  handle.addEventListener('mousedown', function(e) {
+    e.preventDefault();
+    isDragging = true;
+    handle.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!isDragging) return;
+    // 计算右侧面板宽度 = viewport宽度 - 鼠标X坐标
+    var w = document.documentElement.clientWidth - e.clientX;
+    // 限幅 180~800px
+    w = Math.max(180, Math.min(800, w));
+    right.style.width = w + 'px';
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (!isDragging) return;
+    isDragging = false;
+    handle.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+})();
 </script>
 
 </body>

@@ -36,7 +36,7 @@ canvas{display:block}
 <button id="btn-debug" onclick="toggleDebug()" style="position:fixed;bottom:12px;right:12px;z-index:10;background:rgba(33,38,45,0.92);color:#f0883e;border:1px solid #30363d;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;" title="Debug Console">🐛</button>
 <div id="debug-panel" style="position:fixed;bottom:10px;right:10px;z-index:30;display:none;width:360px;max-height:300px;background:rgba(13,17,23,0.97);border:1px solid #30363d;border-radius:8px;overflow:hidden;">
   <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#161b22;border-bottom:1px solid #30363d;">
-    <span style="color:#f0883e;font-size:12px;font-weight:bold;">Debug Console</span>
+    <span style="color:#f0883e;font-size:12px;font-weight:bold;" id="debug-console-label">Debug Console</span>
     <div style="display:flex;gap:6px;">
       <button onclick="checkAllStatus()" style="background:#f0883e;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;">🔍 Status</button>
       <button onclick="stressTest()" style="background:#3fb950;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;">🧪 Test</button>
@@ -92,7 +92,7 @@ function toggleDebug(){
 }
 function copyDebugLog(){
   var el=document.getElementById('debug-log');
-  if(el&&el.textContent){navigator.clipboard.writeText(el.textContent).then(function(){alert('Copied!');});}
+  if(el&&el.textContent){navigator.clipboard.writeText(el.textContent).then(function(){console.log('✅ 日志已复制 ('+el.textContent.length+' chars)');});}
 }
 function clearDebugLog(){_debugLogs=[];var el=document.getElementById('debug-log');if(el)el.textContent='';}
 function checkAllStatus(){
@@ -319,7 +319,7 @@ var edges=[
 // ====== 常量 ======
 var SC={done:'#3fb950','in-progress':'#58a6ff',todo:'#6e7681',blocked:'#f85149',waiting:'#bc8cff'};
 // SL removed - unused, status labels now in i18n
-var APP_VERSION='v1.6'; // 随系统升级手动更新
+var APP_VERSION='v1.7'; // 随系统升级手动更新
 document.title='AI\u2014FUSANG '+APP_VERSION;
 var NW=120,NH=40,PAD_X=120,PAD_TOP=50,LGAP=82,PED_H=65;
 var treeScale=0.95, treeOffsetX=0, treeOffsetY=0; // 树整体缩放和偏移（打包用）
@@ -355,6 +355,9 @@ function setLang(l){
     var btn=document.getElementById('btn-'+m);
     if(btn) btn.innerText=i18n[l].modeLabels[m];
   });
+  // 更新调试控制台标签
+  var debugLabel=document.getElementById('debug-console-label');
+  if(debugLabel) debugLabel.textContent=i18n[l].debugConsole;
 }
 function updateLangButtons(){
   var bZh=document.getElementById('btn-zh'), bEn=document.getElementById('btn-en');
@@ -368,7 +371,7 @@ function updateLangButtons(){
   }
 }
 lang=detectLang();
-updateLangButtons();
+setLang(lang);  // 初始化模式按钮文本和标题（与检测到的语言一致）
 // document.title will be set after i18n definition below
 
 // ====== 动画状态 ======
@@ -440,7 +443,8 @@ var i18n={
       {icon:'🌐',label:'花苞',desc:'预留接口/Stub'},
       {icon:'🐉',label:'盘龙',desc:'异常监控/Watchdog'},
       {icon:'👑',label:'树顶',desc:'程序出口/Exit'}
-    ]
+    ],
+    debugConsole:'Debug Console'
   },
   en:{
     title:'Mysterious Eastern World Tree',
@@ -482,7 +486,8 @@ var i18n={
       {icon:'🌐',label:'Bud',desc:'Reserved Interface/Stub'},
       {icon:'🐉',label:'Dragon',desc:'Watchdog/Monitor'},
       {icon:'👑',label:'Crown',desc:'Program Exit'}
-    ]
+    ],
+    debugConsole:'Debug Console'
   }
 };
 
@@ -602,6 +607,25 @@ function sendNodeClick(nodeId){
     console.error('[Fusang] ❌ postMessage 发送失败：',e);
   }
 }
+
+// 发送状态变更反馈信号（V4.1）
+function sendStatusChange(nodeId, oldStatus, newStatus){
+  if(!parentReady) return;
+  try {
+    parent.postMessage({
+      type: 'FUSANG_STATUS_CHANGE',
+      nodeId: nodeId,
+      oldStatus: oldStatus,
+      newStatus: newStatus,
+      timestamp: Date.now(),
+      secret: SECRET
+    }, '*');
+  } catch(e){
+    console.error('[Fusang] ❌ STATUS_CHANGE postMessage 发送失败：',e);
+  }
+}
+
+// ====== 核心任务操作函数 ======
 
 // ====== 缓动函数 ======
 function easeOut(t){return 1-Math.pow(1-t,3);}
@@ -1324,7 +1348,7 @@ function recalcAll(){
       var ups=edges.filter(function(e){return e.to===t.id;});
       if(ups.length===0) return;
       var ok=ups.every(function(e){var u=taskById(e.from);return u&&u.status==='done'&&u.error==null;});
-      if(ok){t.status='done';t.error=null;changed=true;}
+      if(ok){var oldSt=t.status;t.status='done';t.error=null;changed=true;if(oldSt!=='done') sendStatusChange(t.id,oldSt,'done');}
     });
     if(!changed) break;
   }
@@ -1333,14 +1357,20 @@ function recalcAll(){
 function injectFault(nodeId){
   var task=taskById(nodeId);
   if(!task){console.warn('[Fusang] task not found for '+nodeId); return;}
+  var oldStatus=task.status;
   task.status='blocked';
   task.error={message:{zh:'注入故障：模拟错误',en:'Injected fault: simulated error'},file:task.file||'',line:1,callChain:[]};
+  sendStatusChange(nodeId, oldStatus, 'blocked');
   recalcAll();
 }
 
 function startFixAnimation(nodeId,type){
   var task=taskById(nodeId);
-  if(task) task.status='fixed';
+  if(task){
+    var oldStatus=task.status;
+    task.status='fixed';
+    sendStatusChange(nodeId, oldStatus, 'fixed');
+  }
   fixAnimations.push({nodeId:nodeId,startTime:now,phase:'flash',type:type});
 }
 
@@ -1351,7 +1381,7 @@ function drawFixAnimations(){
     if(f.phase==='flash'&&elapsed>=300){
       f.phase='glow';
       var task=taskById(f.nodeId);
-      if(task&&task.status==='fixed'){task.status='done';task.error=null;recalcAll();}
+      if(task&&task.status==='fixed'){task.status='done';task.error=null;sendStatusChange(f.nodeId,'fixed','done');recalcAll();}
     }
     if(f.phase==='glow'&&elapsed>=1100){
       f.phase='particles';
@@ -2217,8 +2247,10 @@ window.addEventListener('message',function(event){
       return;
     }
     // 注入故障：status → blocked + 错误信息（不 recalcAll，draw 中 getEffectiveStatus 自动传导下游）
+    var oldStatus=task.status;
     task.status='blocked';
     task.error={message:{zh:event.data.errorMsg||'外部信号触发故障',en:event.data.errorMsgEn||'External fault triggered'},file:task.file||'',line:1,callChain:[]};
+    sendStatusChange(nodeId, oldStatus, 'blocked');
     requestAnimationFrame(draw);
     console.log('[Fusang] 🔴 注入故障：'+nodeId);
     return;
@@ -2236,8 +2268,10 @@ window.addEventListener('message',function(event){
       return;
     }
     // AI 修复：只修复目标节点，不自动传导下游（让用户自己搭建）
+    var oldStatus=task.status;
     task.status='done';
     task.error=null;
+    sendStatusChange(nodeId, oldStatus, 'done');
     requestAnimationFrame(draw);
     console.log('[Fusang] 🤖 AI 修复：'+nodeId);
     return;
@@ -2255,8 +2289,10 @@ window.addEventListener('message',function(event){
       return;
     }
     // 人工修复：只修复目标节点，不自动传导下游（让用户自己搭建）
+    var oldStatus=task.status;
     task.status='done';
     task.error=null;
+    sendStatusChange(nodeId, oldStatus, 'done');
     requestAnimationFrame(draw);
     console.log('[Fusang] ✋ 人工修复：'+nodeId);
     return;
@@ -2269,8 +2305,10 @@ window.addEventListener('message',function(event){
     if(!nodeId||!newStatus){console.warn('[Fusang] ⚠️ SET_STATUS: 参数不完整');return;}
     var task=taskById(nodeId);
     if(!task){console.warn('[Fusang] ⚠️ SET_STATUS: 节点不存在 '+nodeId);return;}
+    var oldStatus=task.status;
     task.status=newStatus;
     if(newStatus!=='blocked') task.error=null; else task.error=task.error||{message:{zh:'外部信号',en:'External signal'},file:task.file||'',line:1,callChain:[]};
+    sendStatusChange(nodeId, oldStatus, newStatus);
     requestAnimationFrame(draw);
     console.log('[Fusang] 📶 设置状态：'+nodeId+'→'+newStatus);
     return;
