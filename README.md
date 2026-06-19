@@ -59,7 +59,7 @@ Red pulsing nodes = blocked tasks. Click → jump to the exact code line. No mor
 ## 🚀 Quick Start
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/AI-Fusang.git
+git clone https://github.com/firecangshu/AI-fusang.git
 cd AI-Fusang
 open index.html   # or just double-click it
 ```
@@ -72,52 +72,59 @@ No build tools. No npm install. Just open the file.
 
 Fusang is designed as an **embeddable panel** — drop it in an iframe and drive it from your app.
 
-### Embed
+📖 **Full API Documentation**: See [API.md](./API.md) for complete signal reference, code examples, and integration guide.
+
+### Quick Start
+
+**Step 1**: Embed Fusang in your page
 ```html
 <iframe src="index.html" id="fusang-frame"></iframe>
 ```
 
-### Send commands to Fusang
-```javascript
-const fusang = document.getElementById('fusang-frame');
-
-// Replace all nodes (Host → Fusang)
-fusang.contentWindow.postMessage({
-  type: 'FUSANG_UPDATE_NODES',
-  tasks: [/* array of task objects */]
-}, '*');
-
-// Notify AI fix result (Host → Fusang)
-fusang.contentWindow.postMessage({
-  type: 'FUSANG_AI_FIX_RESULT',
-  nodeId: 'data',
-  success: true,
-  fixedCode: 'port: 6379 // fixed'
-}, '*');
-```
-
-### Listen for Fusang events
+**Step 2**: Wait for Fusang to be ready
 ```javascript
 window.addEventListener('message', (e) => {
-  const d = e.data;
-  if(!d || !d.type) return;
-  switch(d.type) {
-    case 'FUSANG_JUMP_TO_CODE':
-      // User clicked a blocked node → jump to code
-      editor.openFile(d.file);
-      editor.setCursorPosition(d.line);
-      break;
-    case 'FUSANG_REQUEST_AI_FIX':
-      // User clicked "AI Fix" → host should run AI fix
-      runAIFix(d.nodeId, d.error);
-      break;
-    case 'FUSANG_NODE_STATUS_CHANGED':
-      // A node's status changed
-      console.log('Node', d.nodeId, 'changed:', d.oldStatus, '→', d.newStatus);
-      break;
+  if(e.data.type === 'FUSANG_READY') {
+    console.log('Fusang is ready!');
+    // Now you can send commands
   }
 });
 ```
+
+**Step 3**: Send commands to control the tree
+```javascript
+const fusang = document.getElementById('fusang-frame');
+
+// Inject a fault (turns node red)
+fusang.contentWindow.postMessage({
+  type: 'FUSANG_INJECT_FAULT',
+  nodeId: 'db',
+  secret: 'fusang-2026'
+}, '*');
+
+// Build a node (turns node green)
+fusang.contentWindow.postMessage({
+  type: 'FUSANG_BUILD_NODE',
+  nodeId: 'db',
+  secret: 'fusang-2026'
+}, '*');
+```
+
+### Available Signals (9 total)
+
+| Direction | Signal | Purpose |
+|-----------|--------|---------|
+| Host → Fusang | `FUSANG_READY` | Handshake: host tells Fusang it's ready |
+| Host → Fusang | `FUSANG_INJECT_FAULT` | Turn a node red (blocked) |
+| Host → Fusang | `FUSANG_BUILD_NODE` | Turn a node green (done) |
+| Host → Fusang | `FUSANG_AI_FIX` | Trigger AI fix animation |
+| Host → Fusang | `FUSANG_SET_STATUS` | Set any status directly |
+| Host → Fusang | `FUSANG_HIGHLIGHT_NODE` | Highlight a node (gold glow) |
+| Fusang → Host | `FUSANG_NODE_CLICK` | User clicked a node |
+| Fusang → Host | `FUSANG_STATUS_CHANGE` | A node's status changed |
+| Fusang → Host | `FUSANG_READY` | Fusang finished loading |
+
+See [API.md](./API.md) for full details, security (secret), and code examples.
 
 ---
 
@@ -145,9 +152,15 @@ No AI coding assistant (Cursor, Copilot, Windsurf, etc.) provides a visual task 
 
 ## 🗺️ Roadmap (Ideas Welcome!)
 
+### ✅ Implemented (v1.8)
+- ✅ **Multi-language**: i18n support (Chinese + English, full UI coverage)
+- ✅ **External API**: Full postMessage API (9 signals, secret verification)
+- ✅ **Three Modes**: Demo / Debug / Access (external control)
+- ✅ **Zero Dependencies**: Pure Canvas 2D, no npm install needed
+
+### 🔜 Next
 - 📋 **JSON Import**: Paste your own task data → auto-generate tree
 - 🔄 **Real-time Sync**: Connect to AI assistant APIs (Cursor, Copilot, etc.)
-- 🌐 **Multi-language**: i18n support
 - 📐 **More Layouts**: Radial, timeline, kanban views
 - 🔌 **IDE Plugins**: VS Code extension, JetBrains plugin
 - 🧩 **Custom Themes**: Light mode, custom color schemes
