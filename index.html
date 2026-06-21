@@ -55,6 +55,13 @@ canvas{display:block}
     <span id="mode-status-dot" style="width:6px;height:6px;border-radius:50%;background:#56d364;display:inline-block;flex-shrink:0;"></span>
     <span id="mode-status-text">DEMO</span>
   </div>
+
+<!-- 场景切换（v1.9） -->
+<div id="scene-switch" style="position:fixed;top:10px;right:120px;z-index:9998;display:flex;gap:2px;align-items:center;background:rgba(22,27,34,0.98);border:1px solid #30363d;border-radius:6px;padding:2px 4px;">
+  <button id="btn-scene-build" onclick="setScene('build')" style="background:#238636;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">🔨 搭建</button>
+  <button id="btn-scene-probe" onclick="setScene('probe')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">🔬 探伤</button>
+</div>
+
 </div>
 
 <!-- ★ 探伤模式专用 UI（v1.9，默认隐藏，进入探伤模式后显示） -->
@@ -63,7 +70,7 @@ canvas{display:block}
   <span id="probe-health" style="color:#56d364;font-size:11px;font-weight:bold;white-space:nowrap;">100/100</span>
   <span style="color:#484f58;font-size:10px;white-space:nowrap;">|</span>
   <span id="probe-status-text" style="color:#c9d1d9;font-size:10px;white-space:nowrap;">准备中</span>
-  <button id="btn-probe-exit" onclick="exitProbeMode()" style="background:rgba(248,81,73,0.15);color:#f85149;border:1px solid #f85149;border-radius:10px;padding:1px 7px;font-size:9px;cursor:pointer;white-space:nowrap;margin-left:auto;">✕</button>
+  <button id="btn-probe-exit" onclick="setScene('build')" style="background:rgba(248,81,73,0.15);color:#f85149;border:1px solid #f85149;border-radius:10px;padding:1px 7px;font-size:9px;cursor:pointer;white-space:nowrap;margin-left:auto;">✕</button>
 </div>
 
 <!-- 探伤模式：扫描进度条（顶部居中，状态C时显示） -->
@@ -89,8 +96,15 @@ canvas{display:block}
   <button id="btn-auto" onclick="setMode('auto')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎬 演示</button>
   <button id="btn-interactive" onclick="setMode('interactive')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎮 调试</button>
   <button id="btn-real" onclick="setMode('real')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🔌 接入</button>
-  <button id="btn-probe" onclick="setMode('probe')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🔬 探伤</button>
+
 </div>
+
+<div id="probe-modes" style="position:fixed;top:10px;right:12px;z-index:9999;display:none;gap:3px;align-items:center;background:rgba(22,27,34,0.98);border:1px solid #30363d;border-radius:6px;padding:3px 5px;">
+  <button id="btn-probe-demo" onclick="setProbeMode('demo')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎬 演示</button>
+  <button id="btn-probe-debug" onclick="setProbeMode('debug')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎮 调试</button>
+  <button id="btn-probe-upload" onclick="setProbeMode('upload')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">📂 上传</button>
+</div>
+
 
 <!-- 接入模式：右侧拖拽手柄 -->
 <div class="live-handle" id="live-handle" style="display:none;"></div>
@@ -572,21 +586,9 @@ function hideProbeHTML(){
   if(debugBtn) debugBtn.style.display='';
 }
 function exitProbeMode(needSetMode){
-  probeDemoState=0;
-  probeStartTime=0;
-  probeDemoTime=0;
-  probeState='A';
-  probeUploadedFiles=[];
-  probeScanned=false;
-  probeProblemNodes=[];
-  hideProbeHTML();
-  resetToAllGreen();
-  currentMode='auto';
-  if(needSetMode!==false){
-    setMode('auto');
-  }
-  console.log('[Fusang] 🔬 退出探伤模式');
-}
+  // v1.9 重构后：直接调用 setScene(build)
+  setScene("build");
+} // end exitProbeMode
 function skipProbeDemo(){
   probeDemoState=4;
   probeStartTime=performance.now();
@@ -781,6 +783,7 @@ var phase2bDone=false;        // S9修复完成后标记
 var lastClickTime=performance.now();          // 上次点击时间（调试模式超时检测）
 var currentMode='auto';
 var modeStep=0,modeStartTime=0; // 兼容旧代码
+var currentScene="build"; // 场景：build=搭建 / probe=探伤（v1.9）
 // 演示模式视觉覆盖（不修改底层status）
 var demoDimOverlay=false;       // S0全暗覆盖
 var demoLitSet={};              // S1/S4中已点亮的节点集合
@@ -3388,110 +3391,6 @@ function setMode(mode){
     return;
   }
   // ★ 探伤模式：保留现有树结构，启动演示或等待扫描
-  if(mode==='probe'){
-    demoState=-1; // 停止 auto 模式演示
-    demoDimOverlay=false;
-    demoLitSet={};
-    hideNodeMenu();
-    cv.style.border='none';
-    // 启动探伤演示状态机
-    probeDemoState=0;
-    probeStartTime=performance.now();
-    probeSkipRequested=false;
-    resetToAllGreen();
-    // 隐藏旧模式按钮，显示探伤专用 UI
-    showProbeHTML();
-    console.log('[Fusang] 🔬 探伤模式 → 启动演示');
-  } else if(mode==='real'){
-    // 进入接入模式前，先退出探伤模式
-    if(currentMode==='probe') exitProbeMode(false);
-
-    demoState=-1;
-    demoDimOverlay=false;
-    demoLitSet={};
-    hideNodeMenu();
-    cv.style.border='none';
-    // 所有节点进入「未搭建」待激活状态（接入模式核心逻辑）
-    tasks.forEach(function(t){t.status='todo';t.error=null;});
-    recalcAll();
-    // ★ 接入模式空闲计时器：任何操作都会重置此时间
-    accessModeLastActive=performance.now();
-    // ★ 最高优先权：禁用演示/调试按钮
-    var autoBtn=document.getElementById('btn-auto');
-    var intBtn=document.getElementById('btn-interactive');
-    [autoBtn,intBtn].forEach(function(b){
-      if(b){
-        b.disabled=true;
-        b.style.opacity='0.3';
-        b.style.cursor='not-allowed';
-        b.style.color='#484f58';
-        b.style.background='transparent';
-        b.style.boxShadow='none';
-      }
-    });
-    // ★ 接入按钮常亮高亮
-    var realBtn=document.getElementById('btn-real');
-    if(realBtn){
-      realBtn.disabled=false;
-      realBtn.style.cursor='default';
-      realBtn.style.opacity='1';
-      realBtn.style.color='#0d1117';
-      realBtn.style.background='linear-gradient(135deg,#3fb950,#2ea043)';
-      realBtn.style.fontWeight='bold';
-      realBtn.style.boxShadow='0 0 12px rgba(63,185,80,0.5)';
-    }
-    // 展开右侧面板
-    document.getElementById('live-panel').classList.add('open');
-    document.getElementById('live-handle').style.display='block';
-    if(!window._liveInitialized){ initLivePanel(); }
-    // 重置开关状态（每次进入接入模式都重置为 OFF）
-    if(_liveSwitchOn){ _liveSwitchOn=false; }
-    var swBtn=document.getElementById('live-switch-btn');
-    var swTxt=document.getElementById('live-switch-text');
-    if(swBtn) swBtn.className='live-switch off';
-    if(swTxt) swTxt.textContent='OFF';
-    setLiveConnected(false);
-    // 外部信号已提前到达 → 立即显示已连接 + 触发视觉反馈
-    if(parentReady){
-      var dot=document.getElementById('live-connect-dot');
-      if(dot) dot.className='live-dot connected';
-      var txt=document.getElementById('live-connect-text');
-      if(txt) txt.textContent=i18n[lang].liveConnected||'已连接';
-      globalFlashStart=performance.now();
-      globalGlowStart=performance.now();
-    }
-    enableLiveControls(false);
-    resize(); // 重新计算 canvas 宽度，避免树被遮挡
-    console.log('[Fusang] 🔌 接入模式 → 所有节点未搭建，等待信号激活');
-  } else if(currentMode==='real') {
-    // ★ 从接入模式退出：收起右侧面板 + 恢复按钮
-    document.getElementById('live-panel').classList.remove('open');
-    document.getElementById('live-handle').style.display='none';
-    // 恢复演示/调试按钮
-    var autoBtn=document.getElementById('btn-auto');
-    var intBtn=document.getElementById('btn-interactive');
-    [autoBtn,intBtn].forEach(function(b){
-      if(b){
-        b.disabled=false;
-        b.style.opacity='1';
-        b.style.cursor='pointer';
-        b.style.color='#8b949e';
-        b.style.background='transparent';
-        b.style.boxShadow='none';
-        b.onclick=function(){setMode(this.id.replace('btn-',''));};
-      }
-    });
-    // 接入按钮恢复默认样式
-    var realBtn=document.getElementById('btn-real');
-    if(realBtn){
-      realBtn.style.color='#8b949e';
-      realBtn.style.background='transparent';
-      realBtn.style.fontWeight='normal';
-      realBtn.style.boxShadow='none';
-      realBtn.style.cursor='pointer';
-    }
-    resize(); // 恢复 canvas 全宽
-  }
   // 以下为所有模式通用的收尾逻辑
   currentMode=mode;
   modeStep=0;
@@ -3875,6 +3774,8 @@ function initLiveDragHandle(){
 resize();
 fetchTasks();
 </script>
+
+<script src="scene-switch.js"></script>
 
 </body>
 </html>
