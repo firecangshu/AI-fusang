@@ -44,10 +44,43 @@ canvas{display:block}
 </head>
 <body>
 <canvas id="c"></canvas>
-<!-- 左上：语言切换（标题下方） -->
-<div id="top-lang" style="position:fixed;top:42px;left:12px;z-index:10;display:flex;gap:2px;">
+<!-- 左上：语言切换（标题下方）+ 实时状态指示器 -->
+<div style="position:fixed;top:42px;left:12px;z-index:10;display:flex;gap:6px;align-items:center;">
+  <div id="top-lang" style="display:flex;gap:2px;">
     <button id="btn-zh" onclick="setLang('zh')" style="background:rgba(33,38,45,0.92);color:#58a6ff;border:1px solid #58a6ff;border-radius:4px;padding:2px 7px;font-size:9px;cursor:pointer;">中文</button>
     <button id="btn-en" onclick="setLang('en')" style="background:rgba(33,38,45,0.92);color:#8b949e;border:1px solid #30363d;border-radius:4px;padding:2px 7px;font-size:9px;cursor:pointer;">EN</button>
+  </div>
+  <!-- 模式实时状态指示器 -->
+  <div id="mode-status-indicator" style="display:none;background:#21262d;border:1px solid #30363d;border-radius:3px;padding:2px 7px;font-size:9px;color:#8b949e;font-family:-apple-system,PingFang SC,sans-serif;white-space:nowrap;display:none;align-items:center;gap:4px;">
+    <span id="mode-status-dot" style="width:6px;height:6px;border-radius:50%;background:#56d364;display:inline-block;flex-shrink:0;"></span>
+    <span id="mode-status-text">DEMO</span>
+  </div>
+</div>
+
+<!-- ★ 探伤模式专用 UI（v1.9，默认隐藏，进入探伤模式后显示） -->
+<div id="probe-topbar" style="display:none;position:fixed;top:10px;right:12px;left:auto;z-index:20;background:rgba(33,38,45,0.97);border:1px solid #58a6ff;border-radius:14px;padding:3px 10px;display:none;align-items:center;gap:6px;font-family:-apple-system,PingFang SC,sans-serif;white-space:nowrap;max-width:260px;box-shadow:0 2px 8px rgba(0,0,0,0.35);">
+  <span style="color:#58a6ff;font-size:11px;font-weight:bold;white-space:nowrap;">🔬 探伤</span>
+  <span id="probe-health" style="color:#56d364;font-size:11px;font-weight:bold;white-space:nowrap;">100/100</span>
+  <span style="color:#484f58;font-size:10px;white-space:nowrap;">|</span>
+  <span id="probe-status-text" style="color:#c9d1d9;font-size:10px;white-space:nowrap;">准备中</span>
+  <button id="btn-probe-exit" onclick="exitProbeMode()" style="background:rgba(248,81,73,0.15);color:#f85149;border:1px solid #f85149;border-radius:10px;padding:1px 7px;font-size:9px;cursor:pointer;white-space:nowrap;margin-left:auto;">✕</button>
+</div>
+
+<!-- 探伤模式：扫描进度条（顶部居中，状态C时显示） -->
+<div id="probe-progress" style="display:none;position:fixed;top:36px;right:12px;left:auto;z-index:19;width:180px;height:3px;background:rgba(48,54,61,0.9);border-radius:2px;overflow:hidden;">
+  <div id="probe-progress-fill" style="width:0%;height:100%;background:linear-gradient(90deg,#58a6ff,#1f6feb);transition:width 0.1s;"></div>
+</div>
+
+<!-- 探伤模式：浮动操作卡（右下角，工业风紧凑） -->
+<div id="probe-fab" style="display:none;position:fixed;bottom:80px;right:16px;z-index:20;background:#161b22;border:1px solid #30363d;border-radius:4px;padding:10px;width:200px;font-family:-apple-system,PingFang SC,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.5);">
+  <div id="probe-fab-title" style="color:#58a6ff;font-size:11px;font-weight:bold;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">PROBE</div>
+  <div id="probe-fab-body" style="color:#8b949e;font-size:10px;line-height:1.4;margin-bottom:6px;">
+    请上传 JS/TS 代码文件
+  </div>
+  <input type="file" id="probe-file-input" webkitdirectory multiple style="display:none;">
+  <div style="display:flex;flex-direction:column;gap:4px;">
+    <button id="btn-probe-upload" onclick="document.getElementById('probe-file-input').click()" style="background:#1f6feb;color:#fff;border:none;border-radius:3px;padding:6px;font-size:11px;cursor:pointer;">📂 上传代码</button>
+    <button id="btn-probe-scan" onclick="startProbeScan()" style="background:#238636;color:#fff;border:none;border-radius:3px;padding:6px;font-size:11px;cursor:pointer;display:none;">🔍 开始扫描</button>
   </div>
 </div>
 
@@ -56,6 +89,7 @@ canvas{display:block}
   <button id="btn-auto" onclick="setMode('auto')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎬 演示</button>
   <button id="btn-interactive" onclick="setMode('interactive')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎮 调试</button>
   <button id="btn-real" onclick="setMode('real')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🔌 接入</button>
+  <button id="btn-probe" onclick="setMode('probe')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🔬 探伤</button>
 </div>
 
 <!-- 接入模式：右侧拖拽手柄 -->
@@ -406,8 +440,85 @@ var edges=[
 
 // ====== 常量 ======
 var SC={done:'#3fb950','in-progress':'#58a6ff',todo:'#6e7681',blocked:'#f85149',waiting:'#bc8cff'};
+// ====== 代码探伤仪：质量颜色体系 (v1.9) ======
+var QC={
+  highCoupling:{color:'#f85149',border:'#ff7b72',label:'高耦合'},       // 红色
+  deepNesting:{color:'#d29922',border:'#e3b341',label:'深嵌套'},         // 橙色/金色
+  circularDep:{color:'#a371f7',border:'#bc8cff',label:'循环依赖'},        // 紫色
+  deadCode:{color:'#6e7681',border:'#8b949e',label:'死代码'},            // 灰色
+  largeFunc:{color:'#d29922',border:'#f0883e',label:'超大函数'},          // 黄橙色
+  noErrorHandling:{color:'#f85149',border:'#ff7b72',label:'缺错误处理'}   // 红色
+};
+// 获取节点最严重的质量问题
+// 获取节点所有质量问题（按严重程度排序，返回数组）
+function getQualityIssues(nodeId){
+  var task=taskById(nodeId);
+  if(!task||!task.quality) return [];
+  var q=task.quality, issues=[];
+  if(q.hasCircularDep) issues.push({type:'circularDep',severity:'high',detail:'检测到循环依赖'});
+  if(q.coupling>8) issues.push({type:'highCoupling',severity:'high',detail:'耦合度 '+q.coupling+' (>8)'});
+  if(q.linesOfCode>200) issues.push({type:'largeFunc',severity:'medium',detail:q.linesOfCode+' 行 (>200)'});
+  if(q.nestingDepth>4) issues.push({type:'deepNesting',severity:'medium',detail:'嵌套深度 '+q.nestingDepth+' (>4)'});
+  if(q.isDeadCode) issues.push({type:'deadCode',severity:'low',detail:'不可达代码'});
+  if(!q.hasErrorHandling) issues.push({type:'noErrorHandling',severity:'medium',detail:'缺少 try-catch'});
+  // 严重程度排序：high > medium > low
+  var sevOrder={high:0,medium:1,low:2};
+  issues.sort(function(a,b){ return sevOrder[a.severity]-sevOrder[b.severity]; });
+  return issues;
+}
+// 获取最严重的一个问题（兼容旧调用）
+function getWorstQualityIssue(nodeId){
+  var issues=getQualityIssues(nodeId);
+  return issues.length>0?issues[0]:null;
+}
+// 演示质量数据注入（PS1→PS2 时调用）
+var demoQualityBackup={};
+function injectDemoIssues(){
+  demoQualityBackup={};
+  var issueTypes=['highCoupling','deepNesting','largeFunc','circularDep','deadCode','noErrorHandling'];
+  probeProblemNodes.forEach(function(id){
+    var task=taskById(id);
+    if(!task) return;
+    demoQualityBackup[id]=JSON.parse(JSON.stringify(task.quality||{}));
+    if(!task.quality) task.quality={};
+    var q=task.quality;
+    var num=1+Math.floor(Math.random()*3);
+    for(var i=0;i<num;i++){
+      var type=issueTypes[Math.floor(Math.random()*issueTypes.length)];
+      if(type==='highCoupling') q.coupling=Math.max(q.coupling||0,9+Math.floor(Math.random()*5));
+      if(type==='deepNesting') q.nestingDepth=Math.max(q.nestingDepth||0,5+Math.floor(Math.random()*3));
+      if(type==='largeFunc') q.linesOfCode=Math.max(q.linesOfCode||0,201+Math.floor(Math.random()*200));
+      if(type==='circularDep') q.hasCircularDep=true;
+      if(type==='deadCode') q.isDeadCode=true;
+      if(type==='noErrorHandling') q.hasErrorHandling=false;
+    }
+  });
+  console.log('[Fusang Probe] 已注入质量数据:',probeProblemNodes);
+}
+function resetDemoQuality(){
+  Object.keys(demoQualityBackup).forEach(function(id){
+    var task=taskById(id);
+    if(!task) return;
+    task.quality=demoQualityBackup[id];
+  });
+  demoQualityBackup={};
+  console.log('[Fusang Probe] 已重置质量数据');
+}
+// 计算质量评分 (0-100)
+function getQualityScore(nodeId){
+  var task=taskById(nodeId);
+  if(!task||!task.quality) return 100;
+  var q=task.quality,score=100;
+  if(q.hasCircularDep) score-=25;
+  if(q.coupling>8) score-=Math.min(20,(q.coupling-8)*2);
+  if(q.linesOfCode>200) score-=Math.min(15,(q.linesOfCode-200)/10);
+  if(q.nestingDepth>4) score-=Math.min(15,(q.nestingDepth-4)*5);
+  if(q.isDeadCode) score-=20;
+  if(!q.hasErrorHandling) score-=10;
+  return Math.max(0,Math.round(score));
+}
 // SL removed - unused, status labels now in i18n
-var APP_VERSION='v1.8'; // 随系统升级手动更新
+var APP_VERSION='v1.9.1'; // 随系统升级手动更新 | 代码探伤仪MVP - 修复goal节点emoji渲染异常
 document.title='AI\u2014FUSANG '+APP_VERSION;
 var NW=120,NH=40,PAD_X=120,PAD_TOP=50,LGAP=82,PED_H=65;
 var treeScale=0.95, treeOffsetX=0, treeOffsetY=0; // 树整体缩放和偏移（打包用）
@@ -432,6 +543,186 @@ function detectLang(){
   var navLang=(navigator.language||navigator.userLanguage||'zh').toLowerCase();
   return navLang.startsWith('zh')?'zh':'en';
 }
+// ====== 探伤模式专用函数（v1.9）======
+// 显示/隐藏探伤模式 HTML 元素
+function showProbeHTML(){
+  var topbar=document.getElementById('probe-topbar');
+  var fab=document.getElementById('probe-fab');
+  if(topbar) topbar.style.display='flex';
+  if(fab) fab.style.display='block';
+  // 隐藏整个右上角模式按钮组（探伤模式下不需要切换模式）
+  var modesBar=document.getElementById('top-modes');
+  if(modesBar) modesBar.style.display='none';
+  // 隐藏调试按钮（避免右下角拥挤）
+  var debugBtn=document.getElementById('btn-debug');
+  if(debugBtn) debugBtn.style.display='none';
+}
+function hideProbeHTML(){
+  var topbar=document.getElementById('probe-topbar');
+  var fab=document.getElementById('probe-fab');
+  var progress=document.getElementById('probe-progress');
+  if(topbar) topbar.style.display='none';
+  if(fab) fab.style.display='none';
+  if(progress) progress.style.display='none';
+  // 恢复右上角模式按钮组
+  var modesBar=document.getElementById('top-modes');
+  if(modesBar) modesBar.style.display='';
+  // 恢复调试按钮
+  var debugBtn=document.getElementById('btn-debug');
+  if(debugBtn) debugBtn.style.display='';
+}
+function exitProbeMode(needSetMode){
+  probeDemoState=0;
+  probeStartTime=0;
+  probeDemoTime=0;
+  probeState='A';
+  probeUploadedFiles=[];
+  probeScanned=false;
+  probeProblemNodes=[];
+  hideProbeHTML();
+  resetToAllGreen();
+  currentMode='auto';
+  if(needSetMode!==false){
+    setMode('auto');
+  }
+  console.log('[Fusang] 🔬 退出探伤模式');
+}
+function skipProbeDemo(){
+  probeDemoState=4;
+  probeStartTime=performance.now();
+  probeDemoTime=0;
+  var skipBtn=document.getElementById('btn-probe-skip');
+  if(skipBtn) skipBtn.style.display='none';
+}
+function startProbeScan(){
+  if(probeUploadedFiles.length===0){
+    alert(lang==='zh'?'请先上传代码':'Please upload code first');
+    return;
+  }
+  probeState='C';
+  probeDemoState=1;
+  probeStartTime=performance.now();
+  var btnScan=document.getElementById('btn-probe-scan');
+  if(btnScan) btnScan.style.display='none';
+  console.log('[Fusang] 🔍 开始扫描 '+probeUploadedFiles.length+' 个文件');
+  setTimeout(function(){
+    probeScanned=true;
+    probeDemoState=2;
+    probeStartTime=performance.now();
+  },3000);
+}
+// 模式实时状态指示器（语言按钮右侧）
+function updateModeStatusIndicator(){
+  var el=document.getElementById('mode-status-indicator');
+  var dot=document.getElementById('mode-status-dot');
+  var txt=document.getElementById('mode-status-text');
+  if(!el||!dot||!txt) return;
+  // 所有非初始模式都显示
+  el.style.display='flex';
+  if(currentMode==='probe'){
+    // 探伤模式：根据演示阶段显示
+    var scene = probeDemoState >= 0 ? 'SIMU' : 'REAL';
+    if(probeDemoState===-1){
+      dot.style.background=probeState==='A'?'#8b949e':'#d29922';
+      var stateText=probeState==='A'?(lang==='zh'?'待命':'STANDBY'):(lang==='zh'?'就绪':'READY');
+      txt.textContent=scene+' · '+stateText;
+    } else {
+      var stateMap={
+        0:{dot:'#8b949e',zh:'准备',en:'PREP'},
+        1:{dot:'#58a6ff',zh:'扫描',en:'SCAN'},
+        2:{dot:'#f85149',zh:'发现',en:'ISSUE'},
+        3:{dot:'#d29922',zh:'定位',en:'LOCATE'},
+        4:{dot:'#a371f7',zh:'修复',en:'FIX'},
+        5:{dot:'#56d364',zh:'完成',en:'DONE'}
+      };
+      var s=stateMap[probeDemoState]||stateMap[0];
+      dot.style.background=s.dot;
+      txt.textContent=scene+' · '+(lang==='zh'?s.zh:s.en);
+    }
+    return;
+  } else if(currentMode==='auto'){
+    dot.style.background='#56d364'; txt.textContent=lang==='zh'?'DEMO':'DEMO'; return;
+  } else if(currentMode==='interactive'){
+    dot.style.background='#d29922'; txt.textContent=lang==='zh'?'DEBUG':'DEBUG'; return;
+  } else if(currentMode==='real' || parentReady){
+    dot.style.background='#58a6ff'; txt.textContent=lang==='zh'?'LIVE':'LIVE'; return;
+  }
+  // 无模式 → 隐藏
+  el.style.display='none';
+}
+function updateProbeHTML(){
+  var progress=document.getElementById('probe-progress');
+  var progressFill=document.getElementById('probe-progress-fill');
+  if(probeDemoState===1){
+    if(progress) progress.style.display='block';
+    if(progressFill) progressFill.style.width=probeScanProgress+'%';
+  } else {
+    if(progress) progress.style.display='none';
+  }
+  var statusText=document.getElementById('probe-status-text');
+  if(statusText){
+    if(probeDemoState===-1){
+      // 演示已停止，根据 probeState 显示
+      statusText.textContent=probeState==='A'?(lang==='zh'?'准备中':'Ready'):(lang==='zh'?'待扫描':'Ready');
+    } else if(probeDemoState===0) statusText.textContent=lang==='zh'?'准备中':'Ready';
+    else if(probeDemoState===1) statusText.textContent=lang==='zh'?'扫描中...':'Scanning...';
+    else if(probeDemoState===2) statusText.textContent='⚠ '+probeProblemNodes.length+' issues';
+    else if(probeDemoState===3) statusText.textContent=lang==='zh'?'定位...':'Locating';
+    else if(probeDemoState===4) statusText.textContent=lang==='zh'?'修复中...':'Fixing...';
+    else if(probeDemoState===5) statusText.textContent=lang==='zh'?'✅ 完成':'✅ Done';
+  }
+  var fabTitle=document.getElementById('probe-fab-title');
+  var fabBody=document.getElementById('probe-fab-body');
+  var btnUpload=document.getElementById('btn-probe-upload');
+  var btnScan=document.getElementById('btn-probe-scan');
+  if(fabTitle&&fabBody){
+    if(probeState==='A'){
+      fabTitle.textContent=lang==='zh'?'🔬 代码探伤':'🔬 PROBE';
+      fabBody.innerHTML=lang==='zh'?'上传 JS/TS 文件夹<br>（.js / .ts / .jsx / .tsx）':'Upload folder<br>(.js/.ts/.jsx/.tsx)';
+      if(btnUpload) btnUpload.style.display='block';
+      if(btnScan) btnScan.style.display='none';
+    } else if(probeState==='B'){
+      fabTitle.textContent=lang==='zh'?'✅ 已接入':'✅ LOADED';
+      fabBody.innerHTML=lang==='zh'?'已接入 <b>'+probeUploadedFiles.length+'</b> 个文件':'<b>'+probeUploadedFiles.length+'</b> files loaded';
+      if(btnUpload) btnUpload.style.display='block';
+      if(btnScan) btnScan.style.display='block';
+    } else if(probeState==='C'){
+      fabTitle.textContent=lang==='zh'?'🔍 扫描中':'🔍 SCANNING';
+      fabBody.innerHTML=lang==='zh'?'分析 '+probeUploadedFiles.length+' 个文件...':'Analyzing '+probeUploadedFiles.length+' files...';
+      if(btnUpload) btnUpload.style.display='none';
+      if(btnScan) btnScan.style.display='none';
+    }
+  }
+  var healthEl=document.getElementById('probe-health');
+  if(healthEl){
+    var hp=100; // 默认满分
+    if(probeDemoState===-1 && probeState==='B') hp=100; // 已上传，待扫描
+    else if(probeScanned) hp=probeProblemNodes.length>0?60:100;
+    if(probeDemoState===5) hp=100;
+    healthEl.textContent=hp+'/100';
+    healthEl.style.color=hp>=80?'#56d364':hp>=60?'#d29922':'#f85149';
+  }
+}
+document.addEventListener('DOMContentLoaded',function(){
+  var fileInput=document.getElementById('probe-file-input');
+  if(fileInput){
+    fileInput.addEventListener('change',function(e){
+      var files=Array.from(e.target.files).filter(function(f){
+        return /\.(js|ts|jsx|tsx)$/i.test(f.name);
+      });
+      probeUploadedFiles=files;
+      if(files.length>0){
+        probeState='B';
+        // ★ 上传代码后停止演示，直接进真实流程
+        probeDemoState=-1; // 停止演示状态机
+        console.log('[Fusang] 📂 已上传 '+files.length+' 个 JS/TS 文件 → 进入待扫描状态');
+      } else {
+        alert(lang==='zh'?'未发现 JS/TS 文件':'No JS/TS files found');
+      }
+    });
+  }
+});
+
 function setLang(l){
   lang=l;
   localStorage.setItem('fusang-lang',l);
@@ -493,6 +784,19 @@ var modeStep=0,modeStartTime=0; // 兼容旧代码
 // 演示模式视觉覆盖（不修改底层status）
 var demoDimOverlay=false;       // S0全暗覆盖
 var demoLitSet={};              // S1/S4中已点亮的节点集合
+// 探伤模式状态机变量（v1.9 新增）
+var probeDemoState=0;           // 0=未启动, 1=扫描中, 2=结果展示, 3=逐一聚焦, 4=修复, 5=全绿庆祝
+var probeStartTime=0;           // 探伤演示开始时间
+var probeDemoTime=0;            // 当前状态已用时间
+var probeScanProgress=0;        // 扫描进度 (0-100)
+var probeProblemNodes=[];       // 演示用"问题节点"列表
+var probeSkipRequested=false;   // 用户请求跳过演示
+// 探伤模式业务状态（水龙头逻辑）
+var probeUploadedFiles=[];      // 用户上传的文件列表
+var probeScanned=false;         // 是否已完成扫描
+var probeState='A';             // A=没接水, B=有水没开龙头, C=有水开龙头
+var probeReportBtn=null;        // InfoCard「查看报告」按钮 hit 区域 {x,y,w,h,taskId}
+var probeLocateBtn=null;        // InfoCard「定位代码」按钮 hit 区域 {x,y,w,h,taskId}
 
 // ====== i18n 双语 ======
 var i18n={
@@ -526,7 +830,7 @@ var i18n={
       {color:'#f85149',label:'阻塞'},
       {color:'#bc8cff',label:'等待中'}
     ],
-    modeLabels:{auto:'🎬 演示',interactive:'🎮 调试',real:'🔌 接入'},
+    modeLabels:{auto:'🎬 演示',interactive:'🎮 调试',real:'🔌 接入',probe:'🔬 探伤'},
     legendItems:[
       {icon:'🏞️',label:'底座',desc:'运行环境 Runtime'},
       {icon:'🔑',label:'树根',desc:'配置文件/Env/Secrets'},
@@ -612,7 +916,7 @@ var i18n={
       {color:'#f85149',label:'Blocked'},
       {color:'#bc8cff',label:'Waiting'}
     ],
-    modeLabels:{auto:'🎬 Demo',interactive:'🎮 Debug',real:'🔌 Live'},
+    modeLabels:{auto:'🎬 Demo',interactive:'🎮 Debug',real:'🔌 Live',probe:'🔬 Probe'},
     legendItems:[
       {icon:'🏞️',label:'Pedestal',desc:'Runtime Environment'},
       {icon:'🔑',label:'Roots',desc:'Config/Env/Secrets'},
@@ -847,6 +1151,43 @@ function draw(timestamp){
   // 动态计算 treeOffsetY：让底座底部碰到🐛按钮顶部
   // 公式推导：缩放后底座底部 = treeOffsetY + H * treeScale → 目标 = H - 36
   treeOffsetY = H * (1 - treeScale) - 8;
+  // 探伤演示状态机推进（用 now 真实时间戳，不用 probeStartTime）
+  if(currentMode==='probe' && probeDemoState>=0 && probeDemoState<6){
+    probeDemoTime=now-probeStartTime;
+    if(probeDemoState===0 && probeDemoTime>1500){
+      probeDemoState=1;probeStartTime=now;
+      var allIds=tasks.map(function(t){return t.id;});
+      var cnt=2+Math.floor(Math.random()*7);
+      for(var k=allIds.length-1;k>0;k--){
+        var r=Math.floor(Math.random()*(k+1));
+        var tmp2=allIds[k];allIds[k]=allIds[r];allIds[r]=tmp2;
+      }
+      probeProblemNodes=allIds.slice(0,cnt);
+      console.log('[Fusang Probe] 演示问题节点:',probeProblemNodes);
+    } else if(probeDemoState===1 && probeDemoTime>3000){
+      probeDemoState=2;probeStartTime=now;
+      // 注入演示质量数据（让问题节点真正变红 + 角标显示）
+      injectDemoIssues();
+      console.log('[Fusang Probe] PS2 发现问题，已注入质量数据到节点:',probeProblemNodes);
+    } else if(probeDemoState===1){
+      probeScanProgress=Math.min(100,Math.floor(probeDemoTime/30));
+    } else if(probeDemoState===2 && probeDemoTime>4000){
+      probeDemoState=3;probeStartTime=now;
+    } else if(probeDemoState===3 && probeDemoTime>Math.max(probeProblemNodes.length,1)*1500){
+      probeDemoState=4;probeStartTime=now;
+    } else if(probeDemoState===4 && probeDemoTime>Math.max(probeProblemNodes.length,1)*800){
+      probeDemoState=5;probeStartTime=now;
+    } else if(probeDemoState===5 && probeDemoTime>2500){
+      // PS5 → 演示循环结束，重置到 PS0 让用户能继续看演示
+      // 注意：probeState 保持不变（如果用户已上传，则停在状态B/C）
+      probeDemoState=0;probeStartTime=now;
+      probeProblemNodes=[]; // 清空演示选中的问题节点
+      resetDemoQuality(); // 重置注入的质量数据
+      probeScanProgress=0;
+      // 如果用户未上传代码（状态A），则恢复浮动卡显示"请上传"
+      // updateProbeHTML() 会自动根据 probeState 切换 FAB 内容
+    }
+  }
 
   // 模式状态机
   if(currentMode==='auto'){
@@ -1019,6 +1360,49 @@ function draw(timestamp){
     }
   }
 
+  // ====== 探伤模式提示文案（轻量级，不动画布）======
+  // v1.9 MVP: 探伤模式只显示浮动 UI，画布本身完全不动
+  // 节点点击后由 drawInfoCard 显示质量信息
+  if(currentMode==='probe'){
+    // 仅在 demo 播放中，递增 probeDemoTime 用于浮动 UI 动画
+    if(probeDemoState>=0 && probeDemoState<6){
+      probeDemoTime=now-probeStartTime;
+      // 状态自动推进
+      if(probeDemoState===0 && probeDemoTime>1500){
+        probeDemoState=1;probeStartTime=now;
+        // 随机选 2-8 个节点作为演示用"问题节点"
+        var allIds=tasks.map(function(t){return t.id;});
+        var cnt=2+Math.floor(Math.random()*7);
+        for(var k=allIds.length-1;k>0;k--){
+          var r=Math.floor(Math.random()*(k+1));
+          var tmp2=allIds[k];allIds[k]=allIds[r];allIds[r]=tmp2;
+        }
+        probeProblemNodes=allIds.slice(0,cnt);
+        console.log('[Fusang Probe] 演示问题节点:',probeProblemNodes);
+      } else if(probeDemoState===1 && probeDemoTime>3000){
+        probeDemoState=2;probeStartTime=now;
+        // PS2：问题节点变红
+        probeProblemNodes.forEach(function(id){
+          var t=taskById(id); if(t) t.status='blocked';
+        });
+      } else if(probeDemoState===2 && probeDemoTime>4000){
+        probeDemoState=3;probeStartTime=now;
+      } else if(probeDemoState===3 && probeDemoTime>probeProblemNodes.length*1500){
+        probeDemoState=4;probeStartTime=now;
+        // PS4：开始修复，节点逐个变绿
+        probeProblemNodes.forEach(function(id){
+          var t=taskById(id); if(t) t.status='done';
+        });
+      } else if(probeDemoState===4 && probeDemoTime>probeProblemNodes.length*800){
+        probeDemoState=5;probeStartTime=now;
+      } else if(probeDemoState===5 && probeDemoTime>2500){
+        probeDemoState=0;probeStartTime=now;
+        resetDemoQuality();
+      }
+    }
+  }
+  // 注：探伤演示状态机已在 draw() 开头用真实时间戳推进，此处保留兼容层
+
   ctx.clearRect(0,0,W,H);
   ctx.save();
   ctx.translate(treeOffsetX, treeOffsetY);
@@ -1059,6 +1443,15 @@ function draw(timestamp){
 
   // 7. 图例
   drawLegend();
+
+  // 7.5 探伤模式 UI（v1.9）— 已改为画布外的 HTML 元素（顶部标签栏 + 浮动操作卡）
+  // 这里只同步更新画布外的元素
+  if(currentMode==='probe'){
+    updateProbeHTML();
+  }
+
+  // 7.6 模式实时状态指示器（语言按钮右侧，所有模式显示）
+  updateModeStatusIndicator();
 
   // 8. 标题（动态版本号，大气排版）
   ctx.fillStyle='#c9d1d9';
@@ -1254,6 +1647,21 @@ function drawNodes(){
     ctx.stroke();
     ctx.shadowBlur=0; // reset shadow
 
+    // ====== 代码探伤仪：质量问题叠加显示 (v1.9) ======
+    var qIssue=getWorstQualityIssue(n.id);
+    if(qIssue){
+      // 质量问题边框（双色：外圈质量色 + 内圈状态色）
+      ctx.strokeStyle=qIssue.border;
+      ctx.lineWidth=2.5;
+      ctx.stroke();
+      // 质量问题脉冲动画（类似阻塞节点闪烁，但用质量色）
+      var qa=0.3+0.4*Math.abs(Math.sin(now/400+n.id.charCodeAt(0)%10));
+      ctx.strokeStyle=qIssue.color+Math.round(qa*255).toString(16).padStart(2,'0');
+      ctx.lineWidth=1.5;
+      ctx.roundRect(x-3,y-3,NW+6,NH+6,10);
+      ctx.stroke();
+    }
+
     // 阻塞节点：红色边框闪烁
     if(realStatus==='blocked'){
       var flashAlpha=0.4+0.6*Math.abs(Math.sin(now/250));
@@ -1262,17 +1670,11 @@ function drawNodes(){
       ctx.stroke();
     }
 
-    // goal 节点金色边框 + 皇冠
+    // goal 节点金色边框（几何皇冠由 drawCrown() 统一绘制，避免 emoji 渲染异常）
     if(n.isGoal){
       ctx.strokeStyle='#d4a72c';
       ctx.lineWidth=2;
       ctx.stroke();
-      // 皇冠（节点上方，放大版）
-      var crownY=n.y-NH/2-24;
-      ctx.font='22px sans-serif';
-      ctx.textAlign='center';
-      ctx.textBaseline='middle';
-      ctx.fillText('👑',n.x,crownY);
     }
 
     // 文字
@@ -1281,6 +1683,47 @@ function drawNodes(){
     ctx.textAlign='center';
     ctx.textBaseline='middle';
     ctx.fillText(n.label[lang],n.x,n.y);
+
+    // 代码探伤仪：质量问题角标 (v1.9) — 1个显示图标，2+个显示数字
+    var qIssues=getQualityIssues(n.id);
+    if(qIssues.length===1){
+      // 1个问题：醒目类型图标（加红色底圆）
+      var badgeX=x+NW/2-14,badgeY=y-NH/2+4;
+      // 红色底圆
+      ctx.fillStyle='rgba(248,81,73,0.9)';
+      ctx.beginPath();
+      ctx.arc(badgeX+5,badgeY-2,9,0,Math.PI*2);
+      ctx.fill();
+      // 图标
+      ctx.font='bold 11px sans-serif';
+      var icons={'highCoupling':'🔴','deepNesting':'🟠','circularDep':'🟣','deadCode':'⚪','largeFunc':'🟡','noErrorHandling':'⚡'};
+      ctx.fillText(icons[qIssues[0].type]||'⚠️',badgeX,badgeY);
+    } else if(qIssues.length>=2){
+      // 2+个问题：醒目红色数字角标（加大+发光边框）
+      var numX=x+NW/2-10,numY=y-NH/2;
+      // 外发光
+      ctx.shadowColor='rgba(248,81,73,0.8)';
+      ctx.shadowBlur=6;
+      // 红色底圆
+      ctx.fillStyle='#f85149';
+      ctx.beginPath();
+      ctx.arc(numX+7,numY+7,10,0,Math.PI*2);
+      ctx.fill();
+      // 白色边框
+      ctx.shadowColor='none';
+      ctx.shadowBlur=0;
+      ctx.strokeStyle='rgba(255,255,255,0.6)';
+      ctx.lineWidth=1.5;
+      ctx.stroke();
+      // 白色粗体数字
+      ctx.fillStyle='#fff';
+      ctx.font='bold 12px sans-serif';
+      ctx.textAlign='center';
+      ctx.textBaseline='middle';
+      ctx.fillText(qIssues.length,numX+7,numY+7);
+      // 清除阴影
+      ctx.shadowColor='none';ctx.shadowBlur=0;
+    }
 
     // 堵点效果：红色脉冲光环 + 边框闪烁
     if(realStatus==='blocked'){
@@ -1802,6 +2245,7 @@ function drawRoots(){
 
 // ====== 树顶皇冠 ======
 function drawCrown(){
+  return; // TODO: 调试 00 来源，临时禁用
   var goalNode=nodeById('goal');
   if(!goalNode) return;
   var cx=goalNode.x, cy=goalNode.y-NH/2-40;
@@ -2104,8 +2548,18 @@ function drawInfoCard(n){
   var realStatus=getEffectiveStatus(n.id);
   var liveTask=taskById(n.id);
   var hasError=realStatus==='blocked'&&!!(liveTask&&liveTask.error);
-  var cx=W-285,cy=20,cw=270,ch=hasError?130:60;
-  var maxTextW=cw-28;
+  // 定位：标题+语言按钮正下方左侧，紧凑版
+  var cx=12,cy=72,cw=220,maxTextW=cw-24;
+
+  // ★ 先计算最终高度（必须在绘制背景之前）
+  var qScore=getQualityScore(n.id);
+  var qIssues=getQualityIssues(n.id);
+  var taskQ=taskById(n.id);
+  var hasQuality=taskQ&&taskQ.quality;
+  var probeExtra=(currentMode==='probe'&&hasQuality)?50:0;
+  var multiH=(hasQuality&&qIssues.length>1)?(qIssues.length-1)*12:0;
+  var ch=hasError?110:52;
+  if(hasQuality) ch+=70+probeExtra+multiH;
 
   ctx.fillStyle='rgba(22,27,34,0.95)';
   ctx.beginPath();
@@ -2115,9 +2569,9 @@ function drawInfoCard(n){
   ctx.lineWidth=1;
   ctx.stroke();
 
-  // 标题
+  // 标题（紧凑）
   ctx.fillStyle='#e6edf3';
-  ctx.font='bold 14px -apple-system,PingFang SC,sans-serif';
+  ctx.font='bold 12px -apple-system,PingFang SC,sans-serif';
   ctx.textAlign='left';
   ctx.textBaseline='top';
   var title=n.label[lang];
@@ -2125,14 +2579,98 @@ function drawInfoCard(n){
     while(ctx.measureText(title+'...').width>maxTextW&&title.length>0) title=title.slice(0,-1);
     title=title+'...';
   }
-  ctx.fillText(title,cx+14,cy+12);
+  ctx.fillText(title,cx+10,cy+8);
 
-  // 状态
+  // 状态（紧凑）
   ctx.fillStyle=SC[realStatus];
-  ctx.font='bold 12px sans-serif';
-  ctx.fillText(i18n[lang].status[realStatus],cx+14,cy+34);
+  ctx.font='bold 11px sans-serif';
+  ctx.fillText(i18n[lang].status[realStatus],cx+10,cy+24);
 
-  // 错误详情（有故障时才展示）
+  // ====== 代码探伤仪：质量信息 (v1.9) ======
+  // qScore/qIssues/taskQ/hasQuality/probeExtra/multiH 已在函数顶部计算
+  if(hasQuality){
+    // 探伤模式：扩展更详细的报告（高度已在顶部计算）
+    // 质量评分（紧凑）
+    var scoreColor=qScore>=80?'#3fb950':qScore>=60?'#d29922':'#f85149';
+    ctx.fillStyle='#8b949e';ctx.font='9px sans-serif';ctx.textAlign='left';
+    ctx.fillText(lang==='zh'?'🔍 质量:':'🔍 Q:',cx+10,cy+40);
+    ctx.fillStyle=scoreColor;ctx.font='bold 11px sans-serif';
+    ctx.fillText(qScore+'/100',cx+60,cy+40);
+    // 质量条（紧凑）
+    ctx.fillStyle='#21262d';ctx.beginPath();ctx.roundRect(cx+10,cy+50,190,4,2);ctx.fill();
+    ctx.fillStyle=scoreColor;ctx.beginPath();ctx.roundRect(cx+10,cy+50,190*qScore/100,4,2);ctx.fill();
+    // 问题列表（紧凑，支持多问题）
+    var icons={'highCoupling':'🔴','deepNesting':'🟠','circularDep':'🟣','deadCode':'⚪','largeFunc':'🟡','noErrorHandling':'⚡'};
+    var listY=cy+60;
+    var maxShow=Math.min(qIssues.length,3); // 最多显示前3个
+    for(var i=0;i<maxShow;i++){
+      var iss=qIssues[i];
+      ctx.fillStyle=iss.severity==='high'?'#f85149':iss.severity==='medium'?'#d29922':'#8b949e';
+      ctx.font='9px sans-serif';
+      ctx.fillText((icons[iss.type]||'⚠️')+' '+iss.detail,cx+10,listY+i*12);
+    }
+    if(qIssues.length>3){
+      ctx.fillStyle='#8b949e';ctx.font='8px sans-serif';
+      ctx.fillText('...'+ (lang==='zh'?'还有 '+(qIssues.length-3)+' 个':'+'+(qIssues.length-3)+' more'),cx+10,listY+3*12);
+    } else if(qIssues.length===0){
+      ctx.fillStyle='#3fb950';ctx.font='9px sans-serif';
+      ctx.fillText('✅ '+ (lang==='zh'? '未发现问题':'No issues'),cx+10,listY);
+    }
+    // 详细指标（紧凑）
+    var q=taskQ.quality;
+    ctx.fillStyle='#484f58';ctx.font='8px monospace';ctx.textAlign='left';
+    var detailLine=(lang==='zh'?'耦合:':'C:')+q.coupling+'  '
+      +(lang==='zh'?'嵌套:':'N:')+q.nestingDepth+'  '
+      +(lang==='zh'?'行数:':'L:')+q.linesOfCode+'  '
+      +(lang==='zh'?'复杂度:':'CC:')+q.cyclomaticComplexity;
+    ctx.fillText(detailLine,cx+10,cy+72+Math.max(qIssues.length,1)*12);
+      // ★ 探伤模式专用：定位代码行 + 查看报告按钮
+    if(currentMode==='probe'){
+      // 动态计算分隔线 Y（问题列表 + 详细指标之后）
+      var sepY=cy+84+Math.max(qIssues.length,1)*12;
+      // 分隔线
+      ctx.strokeStyle='#30363d';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(cx+10,sepY);ctx.lineTo(cx+cw-10,sepY);ctx.stroke();
+      // 代码位置
+      var locText=q.file?('📍 '+(q.file+(q.line?(':'+q.line):''))):(lang==='zh'?'📍 src/'+n.id+'.js':'📍 src/'+n.id+'.js');
+      ctx.fillStyle='#58a6ff';ctx.font='8px monospace';
+      ctx.fillText(locText,cx+10,sepY+8);
+      // 修复建议
+      var fixTips={
+        'highCoupling':lang==='zh'?'💡 拆分模块，降低耦合度':'💡 Split modules',
+        'deepNesting':lang==='zh'?'💡 提取函数，扁平化':'💡 Extract functions',
+        'circularDep':lang==='zh'?'💡 引入中间层解耦':'💡 Decouple via layer',
+        'deadCode':lang==='zh'?'💡 删除未引用的代码':'💡 Remove unused code',
+        'largeFunc':lang==='zh'?'💡 拆分为小函数':'💡 Split into small functions',
+        'noErrorHandling':lang==='zh'?'💡 添加 try-catch':'💡 Add try-catch'
+      };
+      var firstIssue=qIssues.length>0?qIssues[0]:null;
+      ctx.fillStyle='#8b949e';ctx.font='8px sans-serif';
+      var fixText=firstIssue?(fixTips[firstIssue.type]||'💡 优化'):'✅ '+ (lang==='zh'?'质量良好':'Good');
+      ctx.fillText(fixText,cx+10,sepY+20);
+      // 「查看报告」按钮（紧凑）
+      var reportBtnW=72,reportBtnH=16,reportBtnY=sepY+30;
+      ctx.fillStyle='#1f6feb';
+      ctx.beginPath();ctx.roundRect(cx+10,reportBtnY,reportBtnW,reportBtnH,3);ctx.fill();
+      ctx.fillStyle='#fff';ctx.font='bold 8px sans-serif';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(lang==='zh'?'📋 报告':'📋 Report',cx+10+reportBtnW/2,reportBtnY+reportBtnH/2);
+      // 记录按钮 hit 区域（供 click 处理使用）
+      probeReportBtn={x:cx+10,y:reportBtnY,w:reportBtnW,h:reportBtnH,taskId:n.id};
+      // 「📍 定位」小按钮（紧凑，紧挨在「查看报告」右边）
+      var locBtnW=58,locBtnX=cx+10+reportBtnW+4;
+      ctx.fillStyle='#238636';
+      ctx.beginPath();ctx.roundRect(locBtnX,reportBtnY,locBtnW,reportBtnH,3);ctx.fill();
+      ctx.fillStyle='#fff';
+      ctx.fillText(lang==='zh'?'📍 定位':'📍 Go',locBtnX+locBtnW/2,reportBtnY+reportBtnH/2);
+      probeLocateBtn={x:locBtnX,y:reportBtnY,w:locBtnW,h:reportBtnH,taskId:n.id};
+    } else {
+      // 非探伤模式下清空按钮 hit 区域
+      probeReportBtn=null;probeLocateBtn=null;
+    }
+  } // end hasQuality
+
+  // 错误详情（有故障时才展示）— Y坐标下移
   if(hasError){
     ctx.fillStyle='#f85149';
     ctx.font='bold 11px sans-serif';
@@ -2155,8 +2693,8 @@ function drawInfoCard(n){
       ctx.fillText(ccStr,cx+14,cy+72);
     }
 
-    // 操作按钮（非调试模式 && 非外接信号模式才画）
-    if(currentMode!=='interactive' && !parentReady){
+    // 操作按钮（仅演示模式显示；调试/探伤/外接信号模式不显示）
+    if(currentMode==='auto' && !parentReady){
       var btnW=90,btnH=22,btnY=cy+96;
       ctx.fillStyle='#58a6ff';
       ctx.beginPath();
@@ -2185,8 +2723,8 @@ function drawInfoCard(n){
     ctx.fillText(i18n[lang].infoCard.budHint, cx+14, cy+120);
   }
 
-  // 注入故障按钮（调试模式用弹出菜单替代；外接信号模式不显示）
-  if(realStatus==='done'&&currentMode!=='interactive'&&!parentReady){
+  // 注入故障按钮（仅演示模式显示；调试/探伤/外接信号模式不显示）
+  if(realStatus==='done'&&currentMode==='auto'&&!parentReady){
     var btnW=90,btnH=22,btnY=cy+158;
     ctx.fillStyle='#f85149';
     ctx.beginPath();
@@ -2198,6 +2736,125 @@ function drawInfoCard(n){
     ctx.textBaseline='middle';
     ctx.fillText(i18n[lang].infoCard.injectFault, cx+14+btnW/2, btnY+btnH/2);
   }
+}
+
+// ====== 探伤模式：反向定位（T4）======
+// 点击节点 → 复制文件路径+行号到剪贴板，并发送 postMessage 信号
+function locateCode(taskId){
+  var t=taskById(taskId);
+  if(!t) return;
+  var q=(t.quality)||{};
+  // 构造定位信息（按 MVP 规则：复制文件路径 + 行号）
+  var filePath=q.file||('src/'+taskId+'.js');
+  var lineNum=q.line||1;
+  var locStr=filePath+':'+lineNum;
+  // 复制到剪贴板
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(locStr).then(function(){
+      console.log('[Fusang Probe] ✅ 已复制定位信息:',locStr);
+    });
+  } else {
+    // fallback: 旧浏览器
+    var ta=document.createElement('textarea');
+    ta.value=locStr;document.body.appendChild(ta);
+    ta.select();document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+  // 发送 postMessage 给父窗口（如果有的话）
+  try{
+    if(window.parent&&window.parent!==window){
+      window.parent.postMessage({type:'fusang-locate',taskId:taskId,file:filePath,line:lineNum},'*');
+    }
+  }catch(err){/* ignore */}
+  // 显示成功提示
+  showProbeToast(lang==='zh'?'已复制 '+locStr:'Copied '+locStr);
+}
+
+// 探伤模式：Toast 提示
+function showProbeToast(msg){
+  var toast=document.getElementById('probe-toast');
+  if(!toast){
+    toast=document.createElement('div');
+    toast.id='probe-toast';
+    toast.style.cssText='position:fixed;bottom:120px;left:50%;transform:translateX(-50%);z-index:30;background:rgba(33,38,45,0.95);color:#56d364;border:1px solid #56d364;border-radius:6px;padding:8px 16px;font-size:12px;font-family:-apple-system,PingFang SC,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,0.5);opacity:0;transition:opacity 0.3s;';
+    document.body.appendChild(toast);
+  }
+  toast.textContent=msg;
+  toast.style.opacity='1';
+  clearTimeout(toast._timer);
+  toast._timer=setTimeout(function(){toast.style.opacity='0';},2000);
+}
+
+// 探伤模式：生成报告（Markdown 格式，T5 部分）
+function generateProbeReport(){
+  var lines=[];
+  lines.push('# AI-Fusang 代码探伤报告');
+  lines.push('');
+  lines.push('**生成时间**：'+new Date().toLocaleString());
+  lines.push('**项目模式**：探伤 v1.9');
+  lines.push('');
+  lines.push('---');
+  lines.push('');
+  // 总体评分
+  var totalScore=0,totalCount=0;
+  tasks.forEach(function(t){
+    if(t.quality){
+      totalScore+=getQualityScore(t.id);
+      totalCount++;
+    }
+  });
+  var avgScore=totalCount>0?Math.round(totalScore/totalCount):100;
+  lines.push('## 📊 总览');
+  lines.push('');
+  lines.push('- **健康评分**：'+avgScore+'/100');
+  lines.push('- **扫描节点**：'+totalCount+' / '+tasks.length);
+  lines.push('- **问题节点**：'+probeProblemNodes.length);
+  lines.push('');
+  // 问题清单
+  if(probeProblemNodes.length>0){
+    lines.push('## ⚠️ 问题清单（按严重程度排序）');
+    lines.push('');
+    probeProblemNodes.forEach(function(nid,i){
+      var t=taskById(nid);
+      if(!t) return;
+      var q=t.quality||{};
+      var issue=getWorstQualityIssue(nid);
+      var score=getQualityScore(nid);
+      lines.push('### '+(i+1)+'. '+t.label[lang]+' (评分 '+score+'/100)');
+      lines.push('');
+      lines.push('- **位置**：`'+ (q.file||('src/'+nid+'.js'))+(q.line?(':'+q.line):'') +'`');
+      if(issue){
+        lines.push('- **问题类型**：'+issue.label);
+        lines.push('- **详情**：'+issue.detail);
+      }
+      lines.push('- **耦合度**：'+q.coupling+' | **嵌套深度**：'+q.nestingDepth+' | **代码行数**：'+q.linesOfCode);
+      lines.push('');
+    });
+  } else {
+    lines.push('## ✅ 未发现问题');
+    lines.push('');
+    lines.push('所有节点代码质量良好。');
+  }
+  lines.push('---');
+  lines.push('');
+  lines.push('*本报告由 AI-Fusang v1.9 代码探伤仪生成*');
+  return lines.join('\n');
+}
+
+// 探伤模式：导出报告
+function exportProbeReport(){
+  var content=generateProbeReport();
+  var blob=new Blob([content],{type:'text/markdown;charset=utf-8'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;
+  a.download='fusang-probe-report-'+Date.now()+'.md';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showProbeToast(lang==='zh'?'📥 报告已导出':'📥 Report exported');
+  console.log('[Fusang Probe] 📥 已导出探伤报告');
 }
 
 // ====== 图例面板 ======
@@ -2338,6 +2995,23 @@ cv.addEventListener('click',function(e){
     var mbRect=modesBar.getBoundingClientRect();
     if(e.clientX>=mbRect.left&&e.clientX<=mbRect.right&&e.clientY>=mbRect.top&&e.clientY<=mbRect.bottom){
       // 点击在按钮区域内，让原生 onclick 处理，不拦截
+      return;
+    }
+  }
+  var r=cv.getBoundingClientRect();
+  var mx0=e.clientX-r.left, my0=e.clientY-r.top;
+  // ★ 探伤模式：InfoCard 上的「查看报告」和「定位代码」按钮 hit-test
+  if(currentMode==='probe'&&probeReportBtn){
+    var b=probeReportBtn;
+    if(mx0>=b.x&&mx0<=b.x+b.w&&my0>=b.y&&my0<=b.y+b.h){
+      exportProbeReport();
+      return;
+    }
+  }
+  if(currentMode==='probe'&&probeLocateBtn){
+    var b2=probeLocateBtn;
+    if(mx0>=b2.x&&mx0<=b2.x+b2.w&&my0>=b2.y&&my0<=b2.y+b2.h){
+      locateCode(b2.taskId);
       return;
     }
   }
@@ -2709,11 +3383,29 @@ function setMode(mode){
     return;
   }
   // 外部信号已接入时，禁止切换到演示/调试模式
-  if(parentReady && mode!=='real'){
+  if(parentReady && mode!=='real' && mode!=='probe'){
     console.log('[Fusang] ⛔ 外部信号接入中，禁止切换到 '+mode+' 模式');
     return;
   }
-  if(mode==='real'){
+  // ★ 探伤模式：保留现有树结构，启动演示或等待扫描
+  if(mode==='probe'){
+    demoState=-1; // 停止 auto 模式演示
+    demoDimOverlay=false;
+    demoLitSet={};
+    hideNodeMenu();
+    cv.style.border='none';
+    // 启动探伤演示状态机
+    probeDemoState=0;
+    probeStartTime=performance.now();
+    probeSkipRequested=false;
+    resetToAllGreen();
+    // 隐藏旧模式按钮，显示探伤专用 UI
+    showProbeHTML();
+    console.log('[Fusang] 🔬 探伤模式 → 启动演示');
+  } else if(mode==='real'){
+    // 进入接入模式前，先退出探伤模式
+    if(currentMode==='probe') exitProbeMode(false);
+
     demoState=-1;
     demoDimOverlay=false;
     demoLitSet={};
@@ -2808,7 +3500,7 @@ function setMode(mode){
   selectedNode=null;
   rootsExpanded=false;
   // 模式按钮高亮
-  ['btn-auto','btn-interactive','btn-real'].forEach(function(id){
+  ['btn-auto','btn-interactive','btn-real','btn-probe'].forEach(function(id){
     var b=document.getElementById(id);
     if(b) {
       if(id==='btn-'+mode){
@@ -2849,6 +3541,8 @@ function setMode(mode){
 var menuNode=null; // 当前菜单对应的节点
 
 function showNodeMenu(node, screenX, screenY){
+  // 探伤模式不显示调试菜单（探伤有自己的按钮）
+  if(currentMode==='probe') return;
   var menu=document.getElementById('node-menu');
   if(!menu) return;
   menuNode=node;

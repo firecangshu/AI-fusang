@@ -1,193 +1,213 @@
 [
   {
     "id": "entry",
-    "label": {
-      "zh": "程序入口",
-      "en": "Entry Point"
-    },
+    "label": {"zh": "程序入口", "en": "Entry Point"},
     "layer": 0,
     "status": "done",
-    "desc": {
-      "zh": "程序启动入口，main() 函数",
-      "en": "Program entry point, main() function"
-    },
-    "myth": {
-      "zh": "主干起点",
-      "en": "Trunk Start"
-    },
+    "desc": {"zh": "程序启动入口，main() 函数", "en": "Program entry point, main() function"},
+    "myth": {"zh": "主干起点", "en": "Trunk Start"},
     "codeLocation": {"file": "src/main.ts", "line": 10, "column": 1},
-    "error": null
+    "error": null,
+    "quality": {
+      "coupling": 2,
+      "nestingDepth": 1,
+      "linesOfCode": 25,
+      "cyclomaticComplexity": 3,
+      "hasCircularDep": false,
+      "isDeadCode": false,
+      "duplicates": [],
+      "globalVars": [],
+      "hasErrorHandling": true
+    }
   },
   {
     "id": "config",
-    "label": {
-      "zh": "配置管理",
-      "en": "Config"
-    },
+    "label": {"zh": "配置管理", "en": "Config"},
     "layer": 1,
     "status": "done",
-    "desc": {
-      "zh": "环境变量、配置文件加载",
-      "en": "Environment variables, config file loading"
-    },
-    "myth": {
-      "zh": "树根 · 密钥",
-      "en": "Roots · Keys"
-    },
+    "desc": {"zh": "环境变量、配置文件加载", "en": "Environment variables, config file loading"},
+    "myth": {"zh": "树根 · 密钥", "en": "Roots · Keys"},
     "codeLocation": {"file": "src/config/index.ts", "line": 25, "column": 1},
-    "error": null
+    "error": null,
+    "quality": {
+      "coupling": 12,
+      "nestingDepth": 3,
+      "linesOfCode": 156,
+      "cyclomaticComplexity": 7,
+      "hasCircularDep": false,
+      "isDeadCode": false,
+      "duplicates": [],
+      "globalVars": ["CONFIG", "ENV"],
+      "hasErrorHandling": false
+    }
   },
   {
     "id": "db",
-    "label": {
-      "zh": "数据库连接",
-      "en": "Database"
-    },
+    "label": {"zh": "数据库连接", "en": "Database"},
     "layer": 2,
     "status": "done",
-    "desc": {
-      "zh": "PostgreSQL 连接池管理",
-      "en": "PostgreSQL connection pool management"
-    },
-    "myth": {
-      "zh": "枝干",
-      "en": "Branch"
-    },
+    "desc": {"zh": "PostgreSQL 连接池管理", "en": "PostgreSQL connection pool management"},
+    "myth": {"zh": "枝干", "en": "Branch"},
     "codeLocation": {"file": "src/db/connection.ts", "line": 42, "column": 1},
-    "error": null
+    "error": null,
+    "quality": {
+      "coupling": 5,
+      "nestingDepth": 2,
+      "linesOfCode": 89,
+      "cyclomaticComplexity": 4,
+      "hasCircularDep": true,
+      "isDeadCode": false,
+      "duplicates": [],
+      "globalVars": [],
+      "hasErrorHandling": true
+    }
   },
   {
     "id": "cache",
-    "label": {
-      "zh": "缓存层",
-      "en": "Cache"
-    },
+    "label": {"zh": "缓存层", "en": "Cache"},
     "layer": 2,
     "status": "done",
-    "desc": {
-      "zh": "Redis 缓存服务",
-      "en": "Redis cache service"
-    },
-    "myth": {
-      "zh": "枝干",
-      "en": "Branch"
-    },
+    "desc": {"zh": "Redis 缓存服务", "en": "Redis cache service"},
+    "myth": {"zh": "枝干", "en": "Branch"},
     "codeLocation": {"file": "src/cache/redis.ts", "line": 18, "column": 1},
-    "error": null
+    "error": null,
+    "quality": {
+      "coupling": 3,
+      "nestingDepth": 2,
+      "linesOfCode": 67,
+      "cyclomaticComplexity": 3,
+      "hasCircularDep": false,
+      "isDeadCode": false,
+      "duplicates": [],
+      "globalVars": [],
+      "hasErrorHandling": true
+    }
   },
   {
     "id": "api",
-    "label": {
-      "zh": "API 服务",
-      "en": "API Server"
-    },
+    "label": {"zh": "API 服务", "en": "API Server"},
     "layer": 3,
     "status": "done",
-    "desc": {
-      "zh": "REST API 路由和控制器",
-      "en": "REST API routes and controllers"
-    },
-    "myth": {
-      "zh": "金乌 · 触发器",
-      "en": "Crow · Trigger"
-    },
+    "desc": {"zh": "REST API 路由和控制器", "en": "REST API routes and controllers"},
+    "myth": {"zh": "金乌 · 触发器", "en": "Crow · Trigger"},
     "codeLocation": {"file": "src/api/routes.ts", "line": 55, "column": 1},
-    "error": null
+    "error": null,
+    "quality": {
+      "coupling": 8,
+      "nestingDepth": 4,
+      "linesOfCode": 234,
+      "cyclomaticComplexity": 12,
+      "hasCircularDep": false,
+      "isDeadCode": false,
+      "duplicates": ["api-v2"],
+      "globalVars": [],
+      "hasErrorHandling": true
+    }
   },
   {
     "id": "auth",
-    "label": {
-      "zh": "用户认证",
-      "en": "Auth"
-    },
+    "label": {"zh": "用户认证", "en": "Auth"},
     "layer": 3,
     "status": "done",
-    "desc": {
-      "zh": "JWT 认证中间件",
-      "en": "JWT authentication middleware"
-    },
-    "myth": {
-      "zh": "花苞",
-      "en": "Bud"
-    },
+    "desc": {"zh": "JWT 认证中间件", "en": "JWT authentication middleware"},
+    "myth": {"zh": "花苞", "en": "Bud"},
     "codeLocation": {"file": "src/auth/jwt.ts", "line": 33, "column": 1},
-    "error": null
+    "error": null,
+    "quality": {
+      "coupling": 4,
+      "nestingDepth": 2,
+      "linesOfCode": 112,
+      "cyclomaticComplexity": 5,
+      "hasCircularDep": false,
+      "isDeadCode": false,
+      "duplicates": [],
+      "globalVars": [],
+      "hasErrorHandling": true
+    }
   },
   {
     "id": "frontend",
-    "label": {
-      "zh": "前端应用",
-      "en": "Frontend"
-    },
+    "label": {"zh": "前端应用", "en": "Frontend"},
     "layer": 4,
     "status": "done",
-    "desc": {
-      "zh": "React 18 + Vite 前端应用",
-      "en": "React 18 + Vite frontend app"
-    },
-    "myth": {
-      "zh": "枝干",
-      "en": "Branch"
-    },
+    "desc": {"zh": "React 18 + Vite 前端应用", "en": "React 18 + Vite frontend app"},
+    "myth": {"zh": "枝干", "en": "Branch"},
     "codeLocation": {"file": "client/App.jsx", "line": 77, "column": 1},
-    "error": null
+    "error": null,
+    "quality": {
+      "coupling": 6,
+      "nestingDepth": 5,
+      "linesOfCode": 345,
+      "cyclomaticComplexity": 15,
+      "hasCircularDep": false,
+      "isDeadCode": false,
+      "duplicates": [],
+      "globalVars": ["userStore"],
+      "hasErrorHandling": false
+    }
   },
   {
     "id": "tests",
-    "label": {
-      "zh": "测试套件",
-      "en": "Tests"
-    },
+    "label": {"zh": "测试套件", "en": "Tests"},
     "layer": 4,
     "status": "done",
-    "desc": {
-      "zh": "Jest + Supertest 单元测试和集成测试",
-      "en": "Jest + Supertest unit and integration tests"
-    },
-    "myth": {
-      "zh": "枝干",
-      "en": "Branch"
-    },
+    "desc": {"zh": "Jest + Supertest 单元测试和集成测试", "en": "Jest + Supertest unit and integration tests"},
+    "myth": {"zh": "枝干", "en": "Branch"},
     "codeLocation": {"file": "test/**/*.test.js", "line": 5, "column": 1},
-    "error": null
+    "error": null,
+    "quality": {
+      "coupling": 2,
+      "nestingDepth": 1,
+      "linesOfCode": 178,
+      "cyclomaticComplexity": 6,
+      "hasCircularDep": false,
+      "isDeadCode": false,
+      "duplicates": [],
+      "globalVars": [],
+      "hasErrorHandling": true
+    }
   },
   {
     "id": "ci",
-    "label": {
-      "zh": "CI/CD",
-      "en": "CI/CD"
-    },
+    "label": {"zh": "CI/CD", "en": "CI/CD"},
     "layer": 5,
     "status": "done",
-    "desc": {
-      "zh": "GitHub Actions 自动化部署流水线",
-      "en": "GitHub Actions automated deployment pipeline"
-    },
-    "myth": {
-      "zh": "盘龙 · 监控",
-      "en": "Dragon · Monitor"
-    },
+    "desc": {"zh": "GitHub Actions 自动化部署流水线", "en": "GitHub Actions automated deployment pipeline"},
+    "myth": {"zh": "盘龙 · 监控", "en": "Dragon · Monitor"},
     "codeLocation": {"file": ".github/workflows/ci.yml", "line": 12, "column": 1},
-    "error": null
+    "error": null,
+    "quality": {
+      "coupling": 3,
+      "nestingDepth": 2,
+      "linesOfCode": 56,
+      "cyclomaticComplexity": 2,
+      "hasCircularDep": false,
+      "isDeadCode": false,
+      "duplicates": [],
+      "globalVars": [],
+      "hasErrorHandling": true
+    }
   },
   {
     "id": "goal",
-    "label": {
-      "zh": "项目完成",
-      "en": "Project Complete"
-    },
+    "label": {"zh": "项目完成", "en": "Project Complete"},
     "layer": 6,
     "status": "done",
     "isGoal": true,
-    "desc": {
-      "zh": "生产环境部署，用户可使用完整功能",
-      "en": "Production deployment, users can use full features"
-    },
-    "myth": {
-      "zh": "树顶 · 太阳",
-      "en": "Crown · Sun"
-    },
+    "desc": {"zh": "生产环境部署，用户可使用完整功能", "en": "Production deployment, users can use full features"},
+    "myth": {"zh": "树顶 · 太阳", "en": "Crown · Sun"},
     "codeLocation": {"file": "deploy.sh", "line": 1, "column": 1},
-    "error": null
+    "error": null,
+    "quality": {
+      "coupling": 1,
+      "nestingDepth": 1,
+      "linesOfCode": 23,
+      "cyclomaticComplexity": 1,
+      "hasCircularDep": false,
+      "isDeadCode": false,
+      "duplicates": [],
+      "globalVars": [],
+      "hasErrorHandling": false
+    }
   }
 ]
