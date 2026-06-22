@@ -1,0 +1,145 @@
+[1mdiff --git a/README.md b/README.md[m
+[1mindex e175c46..21f1795 100644[m
+[1m--- a/README.md[m
+[1m+++ b/README.md[m
+[36m@@ -1,56 +1,58 @@[m
+[31m-# 🌳 AI-Fusang 扶桑 · 逻辑通天树[m
+[32m+[m[32m# 🌳 AI-Fusang — Code Visualization & Dependency Graph Tool · 逻辑通天树[m
+ [m
+[31m-> **把代码的逻辑通到眼前来**[m
+[32m+[m[32m> **Code Visualization · Dependency Graph · Real-time Task Tree** — See your code logic at a glance.[m
+ [m
+ [Live Demo →](#)[m
+ [m
+ ---[m
+ [m
+[31m-## The Problem[m
+[32m+[m[32m## Why Developers Need Code Visualization[m
+ [m
+[31m-**Code is linear. Logic is web-shaped.**[m
+[32m+[m[32m**Code is linear. Logic is web-shaped.** Traditional editors flatten the web into lines — you scroll through files trying to rebuild the mental model.[m
+ [m
+[31m-Traditional editors flatten the web into lines. Your brain spends more energy rebuilding the model than writing the code.[m
+[32m+[m[32m- 🧠 **12 tasks in progress** — which ones can run in parallel? Your editor can't show you.[m
+[32m+[m[32m- 🔴 **Something's blocked** — you dig through logs, click files one by one, guessing where the bottleneck is.[m
+[32m+[m[32m- 📉 **4 hours coding** — feels like nothing is done. No visual progress, no signal.[m
+ [m
+[31m-- 🧠 You're building 12 tasks — which ones can run in parallel? You can't tell from the editor.[m
+[31m-- 🔴 Something's blocked — you scroll through logs trying to find where, clicking through files one by one.[m
+[31m-- 📉 You've been coding for 4 hours — but it feels like nothing is done. No reward. No signal.[m
+[32m+[m[32m**AI-Fusang is the missing visual layer** — a real-time logic tree that grows with your code.[m
+ [m
+ ---[m
+ [m
+ ## What is AI-Fusang?[m
+ [m
+[31m-AI-Fusang is the **4th dimension** of AI-assisted development — a real-time logic tree that grows with your code.[m
+[32m+[m[32mAI-Fusang fills the **4th dimension** of AI-assisted development:[m
+ [m
+ | Component | Role | Status |[m
+ |-----------|------|--------|[m
+ | 🤖 AI Chat | Talk to AI | ✅ Exists |[m
+ | 💻 Code Editor | Write code | ✅ Exists |[m
+ | 📺 Preview | See results | ✅ Exists |[m
+[31m-| **🌳 Fusang Logic Tree** | **See the logic** | **🆕 This** |[m
+[32m+[m[32m| **🌳 Fusang Logic Tree** | **Visualize code logic** | **🆕 This** |[m
+ [m
+ Named after **扶桑 (Fusang)** — the mythical world tree in Chinese mythology that connects heaven and earth. Fusang connects your code (the ground) to its logic (the sky).[m
+ [m
+[31m-**代码写到哪，树就长到哪，演示面就展示到哪** — Code it, grow it, see it. Three in one.[m
+[32m+[m[32m**Real-time code visualization** — code it, grow it, see it. Three in one.[m
+ [m
+ ---[m
+ [m
+ ## ✨ Core Features[m
+ [m
+[31m-### 🌉 See the Logic — Not Just the Code[m
+[32m+[m[32m### 🌉 Logic Visualization — Not Just Code[m
+ Your brain shouldn't have to rebuild the dependency graph. Fusang renders it in real-time: serial chains, parallel branches, conditional diamonds, convergence points — all visible at a glance.[m
+ [m
+[32m+[m[32m**Use cases**: code review, architecture overview, onboarding new developers, technical debt visualization.[m
+[32m+[m
+ ### 🎯 Blocked? Jump Straight There[m
+ Red pulsing nodes = blocked tasks. Click → jump to the exact code line. No more scrolling through error logs.[m
+ [m
+[31m-### 🎮 Gamified Progress[m
+[32m+[m[32m### 🎮 Gamified Progress — See Your Work[m
+ - **Path Glow**: Complete a full root-to-leaf chain → it lights up gold 🌟[m
+ - **Blocked Dimming**: A blocked node dims everything downstream — you see the blast radius instantly[m
+ - **🎆 Fireworks**: Complete the entire project → fireworks celebration! Because you earned it.[m
+ [m
+ ---[m
+ [m
+[31m-## 🎬 Demo[m
+[32m+[m[32m## 🎬 Demo (Screenshot / GIF)[m
+ [m
+ ![AI-Fusang Demo](https://via.placeholder.com/800x450?text=AI-Fusang+Screenshot)[m
+ [m
+[36m@@ -59,8 +61,8 @@[m [mRed pulsing nodes = blocked tasks. Click → jump to the exact code line. No mor[m
+ ## 🚀 Quick Start[m
+ [m
+ ```bash[m
+[31m-git clone https://github.com/firecangshu/AI-fusang.git[m
+[31m-cd AI-Fusang[m
+[32m+[m[32mgit clone https://github.com/firecangshu/ai-fusang.git[m
+[32m+[m[32mcd ai-fusang[m
+ open index.html   # or just double-click it[m
+ ```[m
+ [m
+[36m@@ -68,7 +70,7 @@[m [mNo build tools. No npm install. Just open the file.[m
+ [m
+ ---[m
+ [m
+[31m-## 🔗 Integration (postMessage API)[m
+[32m+[m[32m## 🔌 Integration (postMessage API)[m
+ [m
+ Fusang is designed as an **embeddable panel** — drop it in an iframe and drive it from your app.[m
+ [m
+[36m@@ -128,7 +130,7 @@[m [mSee [API.md](./API.md) for full details, security (secret), and code examples.[m
+ [m
+ ---[m
+ [m
+[31m-## 🎭 Dual Audience[m
+[32m+[m[32m## 🎭 Who Is This For?[m
+ [m
+ | For AI Beginners | For Developers |[m
+ |-----------------|----------------|[m
+[36m@@ -140,9 +142,9 @@[m [mToggle between **Beginner Guide** and **Developer View** in the top-right corner[m
+ [m
+ ---[m
+ [m
+[31m-## The Gap[m
+[32m+[m[32m## The Gap in AI Coding Assistants[m
+ [m
+[31m-No AI coding assistant (Cursor, Copilot, Windsurf, etc.) provides a visual task graph. You see code changes, but never the big picture. **AI-Fusang fills this gap.**[m
+[32m+[m[32mNo AI coding assistant (Cursor, Copilot, Windsurf, etc.) provides a **visual task graph**. You see code changes, but never the big picture. **AI-Fusang fills this gap.**[m
+ [m
+ > 代码是线性的，逻辑是网状的。传统编辑器把网硬压成线，开发者只能在脑内还原建模。[m
+ > [m
+[36m@@ -163,17 +165,23 @@[m [mNo AI coding assistant (Cursor, Copilot, Windsurf, etc.) provides a visual task[m
+ - 🔄 **Real-time Sync**: Connect to AI assistant APIs (Cursor, Copilot, etc.)[m
+ - 📐 **More Layouts**: Radial, timeline, kanban views[m
+ - 🔌 **IDE Plugins**: VS Code extension, JetBrains plugin[m
+[31m-- 🧩 **Custom Themes**: Light mode, custom color schemes[m
+[32m+[m[32m- 🎨 **Custom Themes**: Light mode, custom color schemes[m
+ [m
+ Open an issue or PR![m
+ [m
+ ---[m
+ [m
+[31m-## ⭐ Found this useful?[m
+[32m+[m[32m## ⭐ Found This Useful?[m
+ [m
+ Star this repo — it helps others discover it.[m
+ [m
+[31m-**代码写到哪，树就长到哪** — Code it, grow it, see it.[m
+[32m+[m[32m**Code visualization for AI-assisted development** — See your logic, grow your tree.[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m## 🔍 Keywords (for search engines)[m
+[32m+[m
+[32m+[m[32m`code visualization` · `dependency graph` · `task tree` · `real-time code feedback` · `AI coding assistant` · `developer tools` · `Canvas 2D` · `postMessage API` · `technical debt visualization` · `code review tool` · `AST visualization` · `逻辑树` · `代码可视化` · `依赖关系图` · `任务树` · `AI 编程可视化`[m
+ [m
+ ---[m
+ [m

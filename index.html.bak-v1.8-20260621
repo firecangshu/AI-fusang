@@ -1,0 +1,3441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI—FUSANG v1.5</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:#0d1117;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif}
+canvas{display:block}
+/* 接入模式右侧面板 */
+.live-panel{position:fixed;top:45px;right:0;bottom:0;width:280px;min-width:200px;max-width:600px;z-index:9998;background:#0d1117;border-left:1px solid #30363d;display:none;flex-direction:column;overflow:hidden;}
+.live-panel.open{display:flex;}
+.live-handle{position:fixed;top:45px;bottom:0;width:10px;right:280px;z-index:9999;cursor:col-resize;background:transparent;transition:background 0.15s;}
+.live-handle:hover,.live-handle.dragging{background:#1a2332;}
+.live-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#4a5568;width:2px;height:36px;border-radius:2px;opacity:0.35;transition:opacity 0.2s;}
+.live-handle:hover::after,.live-handle.dragging::after{opacity:0.8;}
+.live-inner{padding:8px 10px;border-bottom:1px solid #30363d;flex-shrink:0;}
+.live-inner h3{font-size:11px;color:#58a6ff;margin:0 0 4px 0;display:flex;align-items:center;gap:4px;}
+.live-log{font-family:'JetBrains Mono',monospace;font-size:10px;color:#e6edf3;background:#161b22;padding:4px 6px;border-radius:3px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;flex:1;min-height:0;margin:0;}
+.live-btn{background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:3px;padding:2px 7px;font-size:10px;cursor:pointer;margin:1px;display:inline-block;}
+.live-btn:hover{background:#30363d;}
+.live-btn:disabled{opacity:0.3;cursor:not-allowed;}
+.live-sel{background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:3px;padding:2px 4px;font-size:10px;font-family:inherit;flex:1;}
+.live-help{font-size:10px;color:#8b949e;line-height:1.5;padding:0 0 4px 0;}
+/* 状态栏 */
+.live-status-bar{display:flex;align-items:center;gap:4px;font-size:10px;white-space:nowrap;flex-wrap:wrap;padding:4px 10px;border-bottom:1px solid #30363d;background:rgba(22,27,34,0.6);flex-shrink:0;}
+.live-stage{display:flex;align-items:center;gap:3px;background:rgba(22,27,34,0.6);border:1px solid #30363d;border-radius:3px;padding:2px 5px;}
+.live-stage-label{color:#8b949e;font-size:9px;white-space:nowrap;}
+.live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.live-dot.signal-on{background:#3fb950;box-shadow:0 0 5px rgba(63,185,80,0.5);}
+.live-dot.signal-off{background:#6e7681;}
+.live-dot.connected{background:#3fb950;box-shadow:0 0 5px rgba(63,185,80,0.5);}
+.live-dot.disconnected{background:#6e7681;}
+.live-switch{display:inline-flex;align-items:center;gap:4px;padding:1px 6px;border-radius:3px;cursor:pointer;font-size:9px;border:1px solid #30363d;transition:all 0.15s;font-family:inherit;white-space:nowrap;}
+.live-switch.off{background:#161b22;color:#8b949e;}
+.live-switch.on{background:#0d2818;color:#3fb950;border-color:#3fb950;box-shadow:0 0 5px rgba(63,185,80,0.2);}
+.live-switch:disabled{opacity:0.25;cursor:not-allowed;}
+.live-toggle-text{font-weight:bold;letter-spacing:1px;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<!-- 左上：语言切换（标题下方） -->
+<div id="top-lang" style="position:fixed;top:42px;left:12px;z-index:10;display:flex;gap:2px;">
+    <button id="btn-zh" onclick="setLang('zh')" style="background:rgba(33,38,45,0.92);color:#58a6ff;border:1px solid #58a6ff;border-radius:4px;padding:2px 7px;font-size:9px;cursor:pointer;">中文</button>
+    <button id="btn-en" onclick="setLang('en')" style="background:rgba(33,38,45,0.92);color:#8b949e;border:1px solid #30363d;border-radius:4px;padding:2px 7px;font-size:9px;cursor:pointer;">EN</button>
+  </div>
+</div>
+
+<!-- 右上：模式按钮 -->
+<div id="top-modes" style="position:fixed;top:10px;right:12px;z-index:9999;display:flex;gap:3px;align-items:center;background:rgba(22,27,34,0.98);border:1px solid #30363d;border-radius:6px;padding:3px 5px;box-shadow:0 2px 8px rgba(0,0,0,0.5);">
+  <button id="btn-auto" onclick="setMode('auto')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎬 演示</button>
+  <button id="btn-interactive" onclick="setMode('interactive')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎮 调试</button>
+  <button id="btn-real" onclick="setMode('real')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🔌 接入</button>
+  <button id="btn-probe" onclick="setMode('probe')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🔬 探伤</button>
+</div>
+
+<!-- 接入模式：右侧拖拽手柄 -->
+<div class="live-handle" id="live-handle" style="display:none;"></div>
+
+<!-- 接入模式：右侧控制面板 -->
+<div class="live-panel" id="live-panel">
+  <!-- 三段式状态栏 -->
+  <div class="live-status-bar" id="live-status-bar">
+    <div class="live-stage">
+      <span class="live-dot signal-off" id="live-signal-dot"></span>
+      <span class="live-stage-label" id="live-label-signal">信号</span>
+    </div>
+    <div class="live-stage">
+      <span class="live-stage-label" id="live-label-external">模拟</span>
+      <button class="live-switch off" id="live-switch-btn" onclick="toggleLiveSwitch()">
+        <span class="live-toggle-text" id="live-switch-text">OFF</span>
+      </button>
+    </div>
+    <div class="live-stage">
+      <span class="live-dot disconnected" id="live-connect-dot"></span>
+      <span class="live-stage-label" id="live-label-connected">连接</span>
+    </div>
+  </div>
+  <div class="live-inner">
+    <h3 id="live-panel-title">🎮 控制面板</h3>
+    <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
+      <span style="font-size:10px;color:#8b949e;white-space:nowrap;" id="live-node-label">节点</span>
+      <select class="live-sel" id="live-node-select"></select>
+    </div>
+    <div style="margin-bottom:2px;font-size:9px;color:#58a6ff;" id="live-section-build">─ 搭建 ─</div>
+    <div style="margin-bottom:4px;display:flex;gap:2px;">
+      <button class="live-btn" id="live-btn-build" onclick="liveBuild()" style="background:#2ea043;color:#fff;border-color:#2ea043;">🟢搭建</button>
+      <button class="live-btn" id="live-btn-fault" onclick="liveFault()" style="background:#e53935;color:#fff;border-color:#e53935;">🔴故障</button>
+    </div>
+    <div style="margin-bottom:2px;font-size:9px;color:#58a6ff;" id="live-section-fix">─ 修复 ─</div>
+    <div style="margin-bottom:4px;display:flex;gap:2px;">
+      <button class="live-btn" id="live-btn-ai" onclick="liveAiFix()" style="background:#00b365;color:#fff;border-color:#00b365;">🤖AI修复</button>
+      <button class="live-btn" id="live-btn-manual" onclick="liveManualFix()" style="background:#f5a623;color:#fff;border-color:#f5a623;">✋人工修复</button>
+    </div>
+  </div>
+  <div class="live-inner" style="flex:1;display:flex;flex-direction:column;min-height:0;">
+    <h3><span id="live-log-title">📋 消息日志</span>
+      <span style="float:right;font-size:9px;color:#8b949e;cursor:pointer;" id="live-btn-copy" onclick="liveCopyLog()">[📋复制]</span>
+      <span style="float:right;font-size:9px;color:#8b949e;cursor:pointer;margin-right:6px;" id="live-btn-clear" onclick="liveClearLog()">[🗑️清空]</span>
+    </h3>
+    <div class="live-log" id="live-log"></div>
+  </div>
+  <div class="live-inner" style="padding:4px 10px;">
+    <div style="font-size:10px;color:#58a6ff;cursor:pointer;" onclick="liveToggleHelp()">
+      <span id="live-help-arrow">▶</span> <span id="live-help-title">ℹ️ 使用说明</span>
+    </div>
+    <div id="live-help-body" style="display:none;padding:4px 0 0 12px;" class="live-help">
+      <div id="live-help1">1. 打开信号开关 → 控制面板解锁</div>
+      <div id="live-help2">2. 上游阻塞 → 下游自动等待（红变紫）</div>
+      <div id="live-help3">3. 上游修复 → 下游自动接通</div>
+      <div id="live-help4">4. 📋复制日志 → 导出分析</div>
+    </div>
+  </div>
+</div>
+
+<!-- 调试模式：节点操作弹出菜单 -->
+<div id="node-menu" style="position:fixed;z-index:100;display:none;min-width:140px;background:rgba(22,27,34,0.98);border:1px solid #30363d;border-radius:8px;padding:6px 0;box-shadow:0 8px 24px rgba(0,0,0,0.5);"></div>
+
+<!-- 右下角：调试按钮 -->
+<button id="btn-debug" onclick="toggleDebug()" style="position:fixed;bottom:12px;right:12px;z-index:10;background:rgba(33,38,45,0.92);color:#f0883e;border:1px solid #30363d;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;" title="Debug Console">🐛</button>
+<div id="debug-panel" style="position:fixed;bottom:10px;right:10px;z-index:30;display:none;width:360px;max-height:300px;background:rgba(13,17,23,0.97);border:1px solid #30363d;border-radius:8px;overflow:hidden;">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#161b22;border-bottom:1px solid #30363d;">
+    <span style="color:#f0883e;font-size:12px;font-weight:bold;" id="debug-console-label">Debug Console</span>
+    <div style="display:flex;gap:6px;">
+      <button onclick="checkAllStatus()" style="background:#f0883e;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;">🔍 Status</button>
+      <button onclick="stressTest()" style="background:#3fb950;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;">🧪 Test</button>
+      <button onclick="copyDebugLog()" style="background:#21262d;color:#8b949e;border:1px solid #30363d;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;">📋 Copy</button>
+      <button onclick="clearDebugLog()" style="background:#21262d;color:#8b949e;border:1px solid #30363d;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;">🗑️ Clear</button>
+      <button onclick="toggleDebug()" style="background:#21262d;color:#8b949e;border:1px solid #30363d;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;">✕</button>
+    </div>
+  </div>
+  <pre id="debug-log" style="margin:0;padding:8px;font-size:11px;font-family:monospace;color:#c9d1d9;overflow-y:auto;max-height:260px;white-space:pre-wrap;word-break:break-all;"></pre>
+</div>
+<script>
+/* ===== postMessage Protocol (V4 draft) =====
+  Fusang (iframe) → Host (editor):
+    FUSANG_JUMP_TO_CODE     : {file, line, column}
+    FUSANG_REQUEST_AI_FIX  : {nodeId, error:{message,file,line}}
+    FUSANG_NODE_STATUS_CHANGED : {nodeId, oldStatus, newStatus}
+  Host → Fusang (iframe):
+    FUSANG_UPDATE_NODES     : {nodes, edges, errors}
+    FUSANG_AI_FIX_RESULT   : {nodeId, success, fixedCode}
+*/
+// ====== roundRect polyfill ======
+if(!CanvasRenderingContext2D.prototype.roundRect){
+  CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){
+    this.moveTo(x+r,y);
+    this.arcTo(x+w,y,x+w,y+h,r);
+    this.arcTo(x+w,y+h,x,y+h,r);
+    this.arcTo(x,y+h,x,y,r);
+    this.arcTo(x,y,x+w,y,r);
+    this.closePath();
+  };
+}
+
+// ====== 调试控制台 ======
+var _debugLogs=[];
+var _origLog=console.log;
+var _origErr=console.error;
+function _addDebugLog(type,args){
+  var msg=Array.prototype.slice.call(args).map(function(a){
+    if(a===null) return 'null';
+    if(a===undefined) return 'undefined';
+    if(typeof a==='object') try{return JSON.stringify(a);}catch(e){return String(a);}
+    return String(a);
+  }).join(' ');
+  _debugLogs.push((type==='error'?'❌ ':'')+msg);
+  var el=document.getElementById('debug-log');
+  if(el){el.textContent=_debugLogs.join('\n');el.scrollTop=el.scrollHeight;}
+}
+console.log=function(){_origLog.apply(console,arguments);_addDebugLog('log',arguments);};
+console.error=function(){_origErr.apply(console,arguments);_addDebugLog('error',arguments);};
+function toggleDebug(){
+  var p=document.getElementById('debug-panel');
+  p.style.display=p.style.display==='none'?'block':'none';
+}
+function copyDebugLog(){
+  var el=document.getElementById('debug-log');
+  if(el&&el.textContent){navigator.clipboard.writeText(el.textContent).then(function(){console.log('✅ 日志已复制 ('+el.textContent.length+' chars)');});}
+}
+function clearDebugLog(){_debugLogs=[];var el=document.getElementById('debug-log');if(el)el.textContent='';}
+function checkAllStatus(){
+  console.log('=== STATUS CHECK ===');
+  tasks.forEach(function(t){
+    var deps=edges.filter(function(e){return e.to===t.id;}).map(function(e){
+      var u=taskById(e.from);
+      return e.from+'('+u.status+'/'+u.error+')';
+    }).join(', ');
+    var eff=getEffectiveStatus(t.id);
+    console.log(t.id+' | status='+t.status+' | error='+JSON.stringify(t.error)+' | deps=['+deps+'] => '+eff);
+  });
+}
+
+// ====== 自动压力测试 ======
+function _resetAll(){
+  tasks.forEach(function(t){t.status='done';t.error=null;});
+}
+function _getAllEff(){
+  return tasks.map(function(t){return {id:t.id,eff:getEffectiveStatus(t.id)};});
+}
+function _assert(testId,condition,msg){
+  if(condition){console.log('  ✅ '+testId+': '+msg);}
+  else{console.log('  ❌ '+testId+': '+msg);}
+}
+function stressTest(){
+  console.log('========================================');
+  console.log('🧪 AI-Fusang 逻辑压力测试');
+  console.log('========================================');
+  var pass=0,fail=0;
+  var nodeIds=tasks.map(function(t){return t.id;});
+
+  // === T1: 全绿开局 ===
+  console.log('\n--- T1: 全绿开局 ---');
+  _resetAll();
+  var r1=_getAllEff();
+  var allDone=r1.every(function(x){return x.eff==='done';});
+  _assert('T1',allDone,'所有节点 effectiveStatus=done');
+  allDone?pass++:fail++;
+
+  // === T2: 逐节点注入故障 ===
+  console.log('\n--- T2: 逐节点注入故障+验证传导 ---');
+  nodeIds.forEach(function(nid){
+    _resetAll();
+    injectFault(nid);
+    var selfEff=getEffectiveStatus(nid);
+    _assert('T2-'+nid,selfEff==='blocked',nid+' 自身=blocked');
+    selfEff==='blocked'?pass++:fail++;
+    // 检查下游是否 waiting
+    var downstream=_getDownstream(nid);
+    downstream.forEach(function(did){
+      var dEff=getEffectiveStatus(did);
+      _assert('T2-'+nid+'→'+did,dEff==='waiting',did+' 被传导=waiting');
+      dEff==='waiting'?pass++:fail++;
+    });
+    // 检查非下游不受影响
+    var safeIds=nodeIds.filter(function(x){return x!==nid&&downstream.indexOf(x)===-1;});
+    safeIds.forEach(function(sid){
+      var sEff=getEffectiveStatus(sid);
+      _assert('T2-safe-'+sid,sEff==='done',sid+' 不受影响=done');
+      sEff==='done'?pass++:fail++;
+    });
+  });
+
+  // === T3: 逐节点注入+修复 ===
+  console.log('\n--- T3: 逐节点注入+修复→全绿 ---');
+  nodeIds.forEach(function(nid){
+    _resetAll();
+    injectFault(nid);
+    // 模拟修复（跳过动画，直接设状态）
+    var t=taskById(nid);
+    t.status='done';t.error=null;recalcAll();
+    var r3=_getAllEff();
+    var allGreen=r3.every(function(x){return x.eff==='done';});
+    _assert('T3-'+nid,allGreen,'修复'+nid+'后全绿');
+    allGreen?pass++:fail++;
+  });
+
+  // === T4: 同层双故障(db+cache) ===
+  console.log('\n--- T4: 同层双故障(db+cache) ---');
+  _resetAll();
+  injectFault('db');injectFault('cache');
+  _assert('T4-api',getEffectiveStatus('api')==='waiting','api=waiting(两个上游都坏)');
+  getEffectiveStatus('api')==='waiting'?pass++:fail++;
+  _assert('T4-auth',getEffectiveStatus('auth')==='waiting','auth=waiting');
+  getEffectiveStatus('auth')==='waiting'?pass++:fail++;
+  // 修 db → api/auth 仍然 waiting（cache 还坏）
+  var dbTask=taskById('db');dbTask.status='done';dbTask.error=null;recalcAll();
+  _assert('T4-partial',getEffectiveStatus('api')==='waiting','修db后api仍waiting(cache还坏)');
+  getEffectiveStatus('api')==='waiting'?pass++:fail++;
+  // 修 cache → 全绿
+  var cacheTask=taskById('cache');cacheTask.status='done';cacheTask.error=null;recalcAll();
+  var r4=_getAllEff();
+  var allGreen4=r4.every(function(x){return x.eff==='done';});
+  _assert('T4-full',allGreen4,'修db+cache后全绿');
+  allGreen4?pass++:fail++;
+
+  // === T5: 先修下游再修上游 ===
+  console.log('\n--- T5: 先修下游(api)→上游(config)还坏→api变紫 ---');
+  _resetAll();
+  injectFault('config');injectFault('api');
+  // 先修 api
+  var apiTask=taskById('api');apiTask.status='done';apiTask.error=null;recalcAll();
+  var apiEff=getEffectiveStatus('api');
+  _assert('T5-api-purple',apiEff==='waiting','修api后变紫(上游config还坏)');
+  apiEff==='waiting'?pass++:fail++;
+  // 再修 config → 全绿
+  var configTask=taskById('config');configTask.status='done';configTask.error=null;recalcAll();
+  var r5=_getAllEff();
+  var allGreen5=r5.every(function(x){return x.eff==='done';});
+  _assert('T5-full',allGreen5,'修config后全绿');
+  allGreen5?pass++:fail++;
+
+  // === T6: 全节点故障+从上往下逐个修复 ===
+  console.log('\n--- T6: 全节点故障+逐个修复 ---');
+  _resetAll();
+  nodeIds.forEach(function(nid){injectFault(nid);});
+  var allBlocked=_getAllEff().every(function(x){return x.eff==='blocked';});
+  _assert('T6-all-blocked',allBlocked,'全节点注入后全blocked');
+  allBlocked?pass++:fail++;
+  // 从上往下逐个修
+  nodeIds.forEach(function(nid){
+    var t=taskById(nid);t.status='done';t.error=null;recalcAll();
+  });
+  var r6=_getAllEff();
+  var allGreen6=r6.every(function(x){return x.eff==='done';});
+  _assert('T6-all-green',allGreen6,'逐个修完后全绿');
+  allGreen6?pass++:fail++;
+
+  // === T7: 反复注入+修复3轮 ===
+  console.log('\n--- T7: 反复注入+修复3轮 ---');
+  _resetAll();
+  var roundOk=true;
+  for(var round=0;round<3;round++){
+    // 随机注入3个故障
+    var shuffled=nodeIds.slice().sort(function(){return Math.random()-0.5;});
+    for(var fi=0;fi<3;fi++){injectFault(shuffled[fi]);}
+    // 修所有
+    tasks.forEach(function(t){if(t.error){t.status='done';t.error=null;}recalcAll();});
+    var r7=_getAllEff();
+    var ok=r7.every(function(x){return x.eff==='done';});
+    if(!ok) roundOk=false;
+  }
+  _assert('T7-rounds',roundOk,'3轮随机注入+修复后全绿');
+  roundOk?pass++:fail++;
+
+  // === 结果 ===
+  _resetAll();
+  console.log('\n========================================');
+  console.log('🧪 测试完成: ✅ '+pass+' 通过, ❌ '+fail+' 失败');
+  console.log('========================================');
+}
+
+function _getDownstream(nodeId){
+  var result=[];
+  var visited={};
+  function dfs(id){
+    if(visited[id]) return;
+    visited[id]=true;
+    edges.filter(function(e){return e.from===id;}).forEach(function(e){
+      result.push(e.to);
+      dfs(e.to);
+    });
+  }
+  dfs(nodeId);
+  return result;
+}
+
+// ====== 数据：5层通用模型 ======
+var tasks=[];  // loaded from tasks.json
+
+function fetchTasks(){
+  fetch('tasks.json').then(function(r){return r.json();}).then(function(data){
+    tasks=data.tasks||data;
+    layout();
+    requestAnimationFrame(draw);
+    // 发送 READY 信号给父窗口
+    if(window.parent!==window){
+      parent.postMessage({type:'FUSANG_READY',secret:SECRET},'*');
+      parentReady=true; // 能发出消息说明父窗口存在且可通信
+      console.log('[Fusang] ✉️ 发送 FUSANG_READY (parentReady=true)');
+    }
+  }).catch(function(e){
+    console.warn('[Fusang] tasks.json 加载失败，使用内置数据:',e);
+    tasks=[
+      {id:'entry',label:{zh:'程序入口',en:'Entry Point'},layer:0,status:'done',desc:{zh:'程序启动入口',en:'Program entry point'},myth:{zh:'主干起点',en:'Trunk Start'},codeLocation:{file:'src/main.ts',line:10,column:1}},
+      {id:'config',label:{zh:'配置管理',en:'Config'},layer:1,status:'done',desc:{zh:'环境变量、配置文件加载',en:'Env vars, config loading'},myth:{zh:'树根·密钥',en:'Roots·Keys'},codeLocation:{file:'src/config/index.ts',line:25,column:1}},
+      {id:'db',label:{zh:'数据库连接',en:'Database'},layer:2,status:'done',desc:{zh:'PostgreSQL 连接池管理',en:'PostgreSQL connection pool'},myth:{zh:'枝干',en:'Branch'},codeLocation:{file:'src/db/connection.ts',line:42,column:1}},
+      {id:'cache',label:{zh:'缓存层',en:'Cache'},layer:2,status:'done',desc:{zh:'Redis 缓存服务',en:'Redis cache service'},myth:{zh:'枝干',en:'Branch'},codeLocation:{file:'src/cache/redis.ts',line:18,column:1}},
+      {id:'api',label:{zh:'API 服务',en:'API Server'},layer:3,status:'done',desc:{zh:'REST API 路由和控制器',en:'REST API routes & controllers'},myth:{zh:'金乌·触发器',en:'Crow·Trigger'},codeLocation:{file:'src/api/routes.ts',line:55,column:1}},
+      {id:'auth',label:{zh:'用户认证',en:'Auth'},layer:3,status:'done',desc:{zh:'JWT 认证中间件',en:'JWT auth middleware'},myth:{zh:'花苞',en:'Bud'},codeLocation:{file:'src/auth/jwt.ts',line:33,column:1}},
+      {id:'frontend',label:{zh:'前端应用',en:'Frontend'},layer:4,status:'done',desc:{zh:'React + Vite 前端应用',en:'React+Vite frontend app'},myth:{zh:'枝干',en:'Branch'},codeLocation:{file:'client/App.jsx',line:77,column:1}},
+      {id:'tests',label:{zh:'测试套件',en:'Tests'},layer:4,status:'done',desc:{zh:'Jest 单元测试和集成测试',en:'Jest unit & integration tests'},myth:{zh:'枝干',en:'Branch'},codeLocation:{file:'test/**/*.test.js',line:5,column:1}},
+      {id:'ci',label:{zh:'CI/CD',en:'CI/CD'},layer:5,status:'done',desc:{zh:'GitHub Actions 自动化部署流水线',en:'GitHub Actions CI/CD pipeline'},myth:{zh:'盘龙·监控',en:'Dragon·Monitor'},codeLocation:{file:'.github/workflows/ci.yml',line:12,column:1}},
+      {id:'goal',label:{zh:'项目完成',en:'Project Complete'},layer:6,status:'done',isGoal:true,desc:{zh:'生产环境部署',en:'Production deployment'},myth:{zh:'树顶·太阳',en:'Crown·Sun'},codeLocation:{file:'deploy.sh',line:1,column:1}}
+    ];
+    layout();
+    requestAnimationFrame(draw);
+    // 发送 READY 信号给父窗口
+    if(window.parent!==window){
+      parent.postMessage({type:'FUSANG_READY',secret:SECRET},'*');
+      parentReady=true;
+      console.log('[Fusang] ✉️ 发送 FUSANG_READY (fallback data, parentReady=true)');
+    }
+  });
+}
+var edges=[
+  {from:'entry',to:'config'},
+  {from:'config',to:'db'},
+  {from:'config',to:'cache'},
+  {from:'db',to:'api'},
+  {from:'db',to:'auth'},
+  {from:'cache',to:'api'},
+  {from:'cache',to:'auth'},
+  {from:'api',to:'frontend'},
+  {from:'api',to:'tests'},
+  {from:'auth',to:'frontend'},
+  {from:'auth',to:'tests'},
+  {from:'frontend',to:'ci'},
+  {from:'tests',to:'ci'},
+  {from:'ci',to:'goal'}
+];
+
+// ====== 常量 ======
+var SC={done:'#3fb950','in-progress':'#58a6ff',todo:'#6e7681',blocked:'#f85149',waiting:'#bc8cff'};
+// ====== 代码探伤仪：质量颜色体系 (v1.9) ======
+var QC={
+  highCoupling:{color:'#f85149',border:'#ff7b72',label:'高耦合'},       // 红色
+  deepNesting:{color:'#d29922',border:'#e3b341',label:'深嵌套'},         // 橙色/金色
+  circularDep:{color:'#a371f7',border:'#bc8cff',label:'循环依赖'},        // 紫色
+  deadCode:{color:'#6e7681',border:'#8b949e',label:'死代码'},            // 灰色
+  largeFunc:{color:'#d29922',border:'#f0883e',label:'超大函数'},          // 黄橙色
+  noErrorHandling:{color:'#f85149',border:'#ff7b72',label:'缺错误处理'}   // 红色
+};
+// 获取节点最严重的质量问题
+function getWorstQualityIssue(nodeId){
+  var task=taskById(nodeId);
+  if(!task||!task.quality) return null;
+  var q=task.quality;
+  // 优先级排序：循环依赖 > 高耦合 > 超大函数 > 深嵌套 > 死代码 > 缺错误处理
+  if(q.hasCircularDep) return {type:'circularDep',...QC.circularDep,detail:'检测到循环依赖'};
+  if(q.coupling>8) return {type:'highCoupling',...QC.highCoupling,detail:'耦合度 '+q.coupling+' (>8)'};
+  if(q.linesOfCode>200) return {type:'largeFunc',...QC.largeFunc,detail:q.linesOfCode+' 行 (>200)'};
+  if(q.nestingDepth>4) return {type:'deepNesting',...QC.deepNesting,detail:'嵌套深度 '+q.nestingDepth+' (>4)'};
+  if(q.isDeadCode) return {type:'deadCode',...QC.deadCode,detail:'不可达代码'};
+  if(!q.hasErrorHandling) return {type:'noErrorHandling',...QC.noErrorHandling,detail:'缺少 try-catch'};
+  return null; // 无问题，用默认状态色
+}
+// 计算质量评分 (0-100)
+function getQualityScore(nodeId){
+  var task=taskById(nodeId);
+  if(!task||!task.quality) return 100;
+  var q=task.quality,score=100;
+  if(q.hasCircularDep) score-=25;
+  if(q.coupling>8) score-=Math.min(20,(q.coupling-8)*2);
+  if(q.linesOfCode>200) score-=Math.min(15,(q.linesOfCode-200)/10);
+  if(q.nestingDepth>4) score-=Math.min(15,(q.nestingDepth-4)*5);
+  if(q.isDeadCode) score-=20;
+  if(!q.hasErrorHandling) score-=10;
+  return Math.max(0,Math.round(score));
+}
+// SL removed - unused, status labels now in i18n
+var APP_VERSION='v1.9'; // 随系统升级手动更新 | 代码探伤仪MVP
+document.title='AI\u2014FUSANG '+APP_VERSION;
+var NW=120,NH=40,PAD_X=120,PAD_TOP=50,LGAP=82,PED_H=65;
+var treeScale=0.95, treeOffsetX=0, treeOffsetY=0; // 树整体缩放和偏移（打包用）
+
+// ====== postMessage Config (V4) ======
+var urlParams=new URLSearchParams(window.location.search);
+var SECRET=urlParams.get('secret')||'fusang-2026';
+var parentReady=false;
+var pendingAcks={}; // messageId → timeout
+
+// ====== Canvas 初始化 ======
+var cv=document.getElementById('c');
+var ctx=cv.getContext('2d');
+var W,H,layoutNodes=[],hoveredNode=null,selectedNode=null;
+var rootsExpanded=false,legendExpanded=false;
+var highlightNodeId=null, highlightNodeStart=0; // V4：高亮节点动画
+var now=0;
+// Language detection & switcher
+function detectLang(){
+  var saved=localStorage.getItem('fusang-lang');
+  if(saved==='zh'||saved==='en') return saved;
+  var navLang=(navigator.language||navigator.userLanguage||'zh').toLowerCase();
+  return navLang.startsWith('zh')?'zh':'en';
+}
+function setLang(l){
+  lang=l;
+  localStorage.setItem('fusang-lang',l);
+  updateLangButtons();
+  document.title=i18n[l].versionTitle;
+  // 更新模式按钮文本
+  var modes=['auto','interactive','real'];
+  modes.forEach(function(m){
+    var btn=document.getElementById('btn-'+m);
+    if(btn) btn.innerText=i18n[l].modeLabels[m];
+  });
+  // 更新调试控制台标签
+  var debugLabel=document.getElementById('debug-console-label');
+  if(debugLabel) debugLabel.textContent=i18n[l].debugConsole;
+  applyLiveLang();
+}
+function updateLangButtons(){
+  var bZh=document.getElementById('btn-zh'), bEn=document.getElementById('btn-en');
+  if(bZh){
+    bZh.style.borderColor=lang==='zh'?'#58a6ff':'#30363d';
+    bZh.style.color=lang==='zh'?'#58a6ff':'#8b949e';
+  }
+  if(bEn){
+    bEn.style.borderColor=lang==='en'?'#58a6ff':'#30363d';
+    bEn.style.color=lang==='en'?'#58a6ff':'#8b949e';
+  }
+}
+lang=detectLang();
+// 注意：setLang(lang) 不在此处调用——i18n 对象尚未定义（见下方第 463 行）
+// 语言初始化（标题、按钮文本、applyLiveLang）由 i18n 定义后的 IIFE 统一处理（第 595-606 行）
+
+// ====== 动画状态 ======
+var budTransitions=[];  // {id, startTime, duration:800, done:false}
+var jinwuPulses=[];     // {id, startTime, x, y, duration:600}
+var dragonParticles=[];  // {t, speed} t∈[0,1] 沿龙身路径参数
+var blockedWarnings=[];   // {nodeId, startTime} 阻塞节点警告
+var edgeParticles=[];    // {edge, t, speed} 边级逆流粒子
+var fixAnimations=[];    // {nodeId, startTime, phase:'flash'|'glow'|'particles'}
+var globalFlashStart=0;   // 全局闪烁开始时间（0=无闪烁）
+var globalGlowStart=0;    // 全局光晕开始时间（0=无光晕）
+var lastExtSignalTime=0;    // 最后一次收到外部信号的时间（用于断开检测）
+var accessModeLastActive=0; // 接入模式下最后一次操作时间（用于空闲退出，3分钟无操作自动切回演示）
+// 演示模式状态机变量
+var demoState=0;             // S0-S10 状态
+var demoStartTime=0;         // 当前状态开始时间
+var executionOrder=[];        // 拓扑排序后的执行顺序
+var lightIndex=0;            // S1/S4中当前点亮位置
+var faultAt=-1;              // S1中故障出现位置（-1表示未出现）
+var repairQueue=[];           // S7/S9中待修复节点列表
+var repairIndex=0;            // S7/S9中当前修复位置
+var faultTriggered=false;     // S1中故障是否已触发
+var fixStarted=false;         // S1中修复是否已开始
+var fixStartTime=0;           // S1中故障注入时间戳
+var phase2aDone=false;        // S7修复完成后标记
+var phase2bDone=false;        // S9修复完成后标记
+var lastClickTime=performance.now();          // 上次点击时间（调试模式超时检测）
+var currentMode='auto';
+var modeStep=0,modeStartTime=0; // 兼容旧代码
+// 演示模式视觉覆盖（不修改底层status）
+var demoDimOverlay=false;       // S0全暗覆盖
+var demoLitSet={};              // S1/S4中已点亮的节点集合
+// 探伤模式状态机变量（v1.9 新增）
+var probeDemoState=0;           // PS0-PS6 状态
+var probeStartTime=0;           // 探伤演示开始时间
+var probeScanProgress=0;        // 扫描进度 (0-100)
+var probeProblemNodes=[];       // 有问题的节点列表（随机选取 2-8 个）
+var probeCurrentNodeIdx=0;      // 当前处理的节点索引
+var probeFixQueue=[];           // 待修复队列
+var probeSkipRequested=false;   // 用户请求跳过演示
+
+// ====== i18n 双语 ======
+var i18n={
+  zh:{
+    title:'神秘的东方世界之树',
+    versionTitle:'AI—FUSANG '+APP_VERSION,
+    status:{done:'已完成','in-progress':'进行中',todo:'待办',blocked:'阻塞',waiting:'等待中'},
+    pedestal:'🏞️ 运行环境 Runtime',
+    roots:{expanded:'🔑 配置 ▲',collapsed:'🔑 配置 ▼'},
+    configWarning:'⚠ 配置异常',
+    blocked:'阻塞',
+    blockedLabel:'阻塞',
+    infoCard:{
+      layer:'层级',
+      myth:'神树意象',
+      error:'错误',
+      callChain:'调用链',
+      aiFix:'🤖 AI修复',
+      manualFix:'✋ 人工修复',
+      budHint:'🌐 点击激活花苞 → 金乌',
+      budLabel:'Stub',
+      injectFault:'⚡ 注入故障'
+    },
+    legendTitle:'神树要件 × 程序概念',
+    legendBtn:'图例',
+    legendStatusTitle:'── 节点状态 ──',
+    legendStatus:[
+      {color:'#3fb950',label:'已完成'},
+      {color:'#58a6ff',label:'进行中'},
+      {color:'#6e7681',label:'待办'},
+      {color:'#f85149',label:'阻塞'},
+      {color:'#bc8cff',label:'等待中'}
+    ],
+    modeLabels:{auto:'🎬 演示',interactive:'🎮 调试',real:'🔌 接入',probe:'🔬 探伤'},
+    legendItems:[
+      {icon:'🏞️',label:'底座',desc:'运行环境 Runtime'},
+      {icon:'🔑',label:'树根',desc:'配置文件/Env/Secrets'},
+      {icon:'┃',label:'主干',desc:'主流程 Main Pipeline'},
+      {icon:'↕',label:'枝干',desc:'分层架构 Layers'},
+      {icon:'☀️',label:'金乌',desc:'触发器/Event Hook'},
+      {icon:'🌐',label:'花苞',desc:'预留接口/Stub'},
+      {icon:'🐉',label:'盘龙',desc:'异常监控/Watchdog'},
+      {icon:'👑',label:'树顶',desc:'程序出口/Exit'}
+    ],
+    debugConsole:'Debug Console',
+    // 接入面板
+    livePanel:'🎮 控制面板',
+    liveNode:'节点',
+    liveSectionBuild:'─ 搭建 ─',
+    liveBuild:'🟢搭建',
+    liveFault:'🔴故障',
+    liveSectionFix:'─ 修复 ─',
+    liveAiFix:'🤖AI修复',
+    liveManualFix:'✋人工修复',
+    liveLogTitle:'📋 消息日志',
+    liveCopy:'[📋复制]',
+    liveClear:'[🗑️清空]',
+    liveHelp:'ℹ️ 使用说明',
+    liveHelp1:'1. 打开信号开关 → 控制面板解锁',
+    liveHelp2:'2. 上游阻塞 → 下游自动等待（红变紫）',
+    liveHelp3:'3. 上游修复 → 下游自动接通',
+    liveHelp4:'4. 📋复制日志 → 导出分析',
+    liveLogLoaded:'测试面板已加载',
+    liveLogReady:'模拟信号就绪，等待开启开关',
+    liveLogExternal:'🔌 外部信号已接管',
+    liveLogDisconnected:'⚠️ 外部信号已断开',
+    liveConnected:'已连接',
+    liveDisconnected:'未连接',
+    liveLogSwitchOn:'🔛 模拟开关 → ON（控制面板已解锁）',
+    liveLogSwitchOff:'🔛 模拟开关 → OFF（控制面板已锁定）',
+    // 接入面板操作日志
+    liveLogNodeNotFound:'⚠️ 节点不存在: ',
+    liveLogBuild:'🟢 搭建: ',
+    liveLogNodeNotBuilt:'⛔ 节点未搭建: ',
+    liveLogNodeAlreadyDone:'⚠️ 节点已搭建，无需重复: ',
+    liveLogFault:'🔴 故障: ',
+    liveLogAiFix:'🤖 AI修复: ',
+    liveLogNodeNotFaulty:'⛔ 节点无故障: ',
+    liveLogManualFix:'✋ 人工修复: ',
+    liveLogNodeFaulted:'⚠️ 节点故障中，请先修复: ',
+    liveLogEmpty:'⚠️ 日志为空',
+    liveLogCopied:'✅ 日志已复制 (',
+    liveLogCopiedFallback:'✅ 日志已复制 (fallback)',
+    liveLogCleared:'日志已清空',
+    // 状态栏
+    liveLabelSignal:'信号',
+    liveLabelExternal:'模拟',
+    liveLabelConnected:'连接'
+  },
+  en:{
+    title:'Mysterious Eastern World Tree',
+    versionTitle:'AI—FUSANG '+APP_VERSION,
+    status:{done:'Done','in-progress':'In Progress',todo:'Todo',blocked:'Blocked',waiting:'Waiting'},
+    pedestal:'🏞️ Runtime Environment',
+    roots:{expanded:'🔑 Config ▲',collapsed:'🔑 Config ▼'},
+    configWarning:'⚠ Config Error',
+    blocked:'Blocked',
+    blockedLabel:'Blocked',
+    infoCard:{
+      layer:'Layer',
+      myth:'Myth',
+      error:'Error',
+      callChain:'Call Chain',
+      aiFix:'🤖 AI Fix',
+      manualFix:'✋ Manual Fix',
+      budHint:'🌐 Click to activate bud → Jinwu',
+      budLabel:'Stub',
+      injectFault:'⚡ Inject Fault'
+    },
+    legendTitle:'Sacred Tree × Program Concept',
+    legendBtn:'Legend',
+    legendStatusTitle:'── Node Status ──',
+    legendStatus:[
+      {color:'#3fb950',label:'Done'},
+      {color:'#58a6ff',label:'In Progress'},
+      {color:'#6e7681',label:'Todo'},
+      {color:'#f85149',label:'Blocked'},
+      {color:'#bc8cff',label:'Waiting'}
+    ],
+    modeLabels:{auto:'🎬 Demo',interactive:'🎮 Debug',real:'🔌 Live',probe:'🔬 Probe'},
+    legendItems:[
+      {icon:'🏞️',label:'Pedestal',desc:'Runtime Environment'},
+      {icon:'🔑',label:'Roots',desc:'Config/Env/Secrets'},
+      {icon:'┃',label:'Trunk',desc:'Main Pipeline'},
+      {icon:'↕',label:'Branches',desc:'Layered Architecture'},
+      {icon:'☀️',label:'Jinwu',desc:'Trigger/Event Hook'},
+      {icon:'🌐',label:'Bud',desc:'Reserved Interface/Stub'},
+      {icon:'🐉',label:'Dragon',desc:'Watchdog/Monitor'},
+      {icon:'👑',label:'Crown',desc:'Program Exit'}
+    ],
+    debugConsole:'Debug Console',
+    // 接入面板
+    livePanel:'🎮 Control Panel',
+    liveNode:'Node',
+    liveSectionBuild:'─ Build ─',
+    liveBuild:'🟢Build',
+    liveFault:'🔴Fault',
+    liveSectionFix:'─ Fix ─',
+    liveAiFix:'🤖AI Fix',
+    liveManualFix:'✋Manual Fix',
+    liveLogTitle:'📋 Message Log',
+    liveCopy:'[📋Copy]',
+    liveClear:'[🗑️Clear]',
+    liveHelp:'ℹ️ Help',
+    liveHelp1:'1. Turn switch ON → unlock panel',
+    liveHelp2:'2. Upstream blocked → downstream waiting (red→purple)',
+    liveHelp3:'3. Upstream fixed → downstream auto-done',
+    liveHelp4:'4. 📋Copy log → export analysis',
+    liveLogLoaded:'Live panel loaded',
+    liveLogReady:'Sim signal ready, awaiting switch ON',
+    liveLogExternal:'🔌 External signal has taken over',
+    liveLogDisconnected:'⚠️ External signal disconnected',
+    liveConnected:'Connected',
+    liveDisconnected:'Disconnected',
+    liveLogSwitchOn:'🔛 Sim switch → ON (panel unlocked)',
+    liveLogSwitchOff:'🔛 Sim switch → OFF (panel locked)',
+    // Access panel operation logs
+    liveLogNodeNotFound:'⚠️ Node not found: ',
+    liveLogBuild:'🟢 Build: ',
+    liveLogNodeNotBuilt:'⛔ Node not built: ',
+    liveLogNodeAlreadyDone:'⚠️ Node already done: ',
+    liveLogFault:'🔴 Fault: ',
+    liveLogAiFix:'🤖 AI Fix: ',
+    liveLogNodeNotFaulty:'⛔ Node not faulty: ',
+    liveLogManualFix:'✋ Manual Fix: ',
+    liveLogNodeFaulted:'⚠️ Node is faulted, please fix first: ',
+    liveLogEmpty:'⚠️ Log is empty',
+    liveLogCopied:'✅ Log copied (',
+    liveLogCopiedFallback:'✅ Log copied (fallback)',
+    liveLogCleared:'Log cleared',
+    // Status bar
+    liveLabelSignal:'Signal',
+    liveLabelExternal:'Sim',
+    liveLabelConnected:'Link'
+  }
+};
+
+// t() 翻译函数（安全网，防止未来有人用 t('key') 调用）
+function t(key){return(i18n[lang]&&i18n[lang][key]!==undefined)?i18n[lang][key]:((i18n.en&&i18n.en[key])||key);}
+
+// Now that i18n is defined, set document title
+document.title=i18n[lang].versionTitle;
+// 初始化模式按钮文本和调试控制台标签
+(function(){
+  var modes=['auto','interactive','real'];
+  modes.forEach(function(m){
+    var btn=document.getElementById('btn-'+m);
+    if(btn) btn.innerText=i18n[lang].modeLabels[m];
+  });
+  var debugLabel=document.getElementById('debug-console-label');
+  if(debugLabel) debugLabel.textContent=i18n[lang].debugConsole;
+  applyLiveLang();
+})();
+
+// 接入面板 i18n 同步
+function applyLiveLang(){
+  var ids=['live-panel-title','live-node-label','live-section-build','live-btn-build','live-btn-fault','live-section-fix','live-btn-ai','live-btn-manual','live-log-title','live-btn-copy','live-btn-clear','live-help-title','live-help1','live-help2','live-help3','live-help4',
+    'live-label-signal','live-label-external','live-label-connected'];
+  var keys=['livePanel','liveNode','liveSectionBuild','liveBuild','liveFault','liveSectionFix','liveAiFix','liveManualFix','liveLogTitle','liveCopy','liveClear','liveHelp','liveHelp1','liveHelp2','liveHelp3','liveHelp4',
+    'liveLabelSignal','liveLabelExternal','liveLabelConnected'];
+  for(var i=0;i<ids.length;i++){
+    var el=document.getElementById(ids[i]);
+    if(el) el.textContent=i18n[lang][keys[i]];
+  }
+}
+
+// ====== 拓扑排序：获取执行顺序 ======
+function getExecutionOrder(){
+  var order=[];
+  var visited={};
+  var visiting={}; // 检测循环依赖
+  var hasCycle=false;
+
+  function visit(nodeId){
+    if(visiting[nodeId]){
+      console.error('[Fusang] 循环依赖检测：'+nodeId+' 正在访问中（存在环）');
+      hasCycle=true;
+      return;
+    }
+    if(visited[nodeId]) return;
+    visiting[nodeId]=true;
+    // 正向遍历：从当前节点出发，沿 from→to 方向访问下游
+    edges.filter(function(e){return e.from===nodeId;}).forEach(function(e){
+      visit(e.to);
+    });
+    visited[nodeId]=true;
+    delete visiting[nodeId];
+    order.push(nodeId);
+  }
+
+  // 从没有依赖的节点开始（根部）
+  var roots=tasks.filter(function(t){return !edges.find(function(e){return e.to===t.id;});});
+  roots.forEach(function(r){visit(r.id);});
+
+  if(hasCycle){
+    console.warn('[Fusang] 检测到循环依赖，执行顺序可能不正确');
+  }
+  return order;
+}
+
+function resize(){
+  var panel=document.getElementById('live-panel');
+  var panelOpen=panel&&panel.classList.contains('open');
+  var pw=panelOpen?panel.offsetWidth:0;
+  cv.width=window.innerWidth-pw;
+  cv.height=window.innerHeight;
+  W=cv.width; H=cv.height;
+  layout();
+}
+
+// ====== 布局：自底向上 ======
+function layout(){
+  var layers={};
+  tasks.forEach(function(t){
+    if(!layers[t.layer]) layers[t.layer]=[];
+    layers[t.layer].push(t);
+  });
+  var maxL=0;
+  tasks.forEach(function(t){if(t.layer>maxL)maxL=t.layer;});
+
+  var treeBottom=H-PED_H-PAD_TOP;
+
+  layoutNodes=tasks.map(function(t){
+    var peers=layers[t.layer];
+    var idx=peers.indexOf(t);
+    var count=peers.length;
+    var y=treeBottom-t.layer*LGAP-NH/2;
+    var x;
+    if(count===1) x=W/2;
+    else x=PAD_X+(W-PAD_X*2)/(count-1)*idx;
+    return Object.assign({},t,{x:x,y:y});
+  });
+}
+
+function nodeById(id){return layoutNodes.find(function(n){return n.id===id;});}
+function taskById(id){return tasks.find(function(t){return t.id===id;});}
+
+// ====== V4 postMessage：发送节点点击事件 ======
+function sendNodeClick(nodeId){
+  // 检查是否在 iframe 中
+  if(window.parent===window){
+    console.log('[Fusang] ℹ️ 不在 iframe 中，不发送 postMessage');
+    return;
+  }
+  // 检查父窗口是否就绪
+  if(!parentReady){
+    console.warn('[Fusang] ⚠️ 父窗口未就绪，延迟发送消息');
+    // 延迟 1 秒后重试（最多重试 3 次）
+    setTimeout(function(){sendNodeClick(nodeId);},1000);
+    return;
+  }
+  // 获取节点数据
+  var task=taskById(nodeId);
+  if(!task){
+    console.warn('[Fusang] ⚠️ 节点不存在：'+nodeId);
+    return;
+  }
+  // 检查是否有 codeLocation
+  if(!task.codeLocation){
+    console.log('[Fusang] ℹ️ 节点无 codeLocation：'+nodeId);
+    // 可选：显示提示「该节点未关联代码文件」
+    return;
+  }
+  // 发送 postMessage
+  var messageId='msg_'+Date.now()+'_'+Math.random().toString(36).substr(2,5);
+  try {
+    parent.postMessage({
+      type:'FUSANG_NODE_CLICK',
+      messageId:messageId,
+      nodeId:nodeId,
+      codeLocation:task.codeLocation,
+      secret:SECRET
+    },'*');
+    console.log('[Fusang] ✉️ 发送 FUSANG_NODE_CLICK：'+nodeId,messageId);
+    // ACK 超时检测（3 秒）
+    pendingAcks[messageId]=setTimeout(function(){
+      console.warn('[Fusang] ⚠️ 消息超时未收到 ACK：'+messageId);
+      delete pendingAcks[messageId];
+    },3000);
+  } catch(e){
+    console.error('[Fusang] ❌ postMessage 发送失败：',e);
+  }
+}
+
+// 发送状态变更反馈信号（V4.1）
+function sendStatusChange(nodeId, oldStatus, newStatus){
+  if(!parentReady) return;
+  try {
+    parent.postMessage({
+      type: 'FUSANG_STATUS_CHANGE',
+      nodeId: nodeId,
+      oldStatus: oldStatus,
+      newStatus: newStatus,
+      timestamp: Date.now(),
+      secret: SECRET
+    }, '*');
+  } catch(e){
+    console.error('[Fusang] ❌ STATUS_CHANGE postMessage 发送失败：',e);
+  }
+}
+
+// ====== 核心任务操作函数 ======
+
+// ====== 缓动函数 ======
+function easeOut(t){return 1-Math.pow(1-t,3);}
+function easeInOut(t){return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;}
+
+// ====== 绘制主循环 ======
+function draw(timestamp){
+  now=timestamp||0;
+  try{
+  // 动态计算 treeOffsetY：让底座底部碰到🐛按钮顶部
+  // 公式推导：缩放后底座底部 = treeOffsetY + H * treeScale → 目标 = H - 36
+  treeOffsetY = H * (1 - treeScale) - 8;
+
+  // 模式状态机
+  if(currentMode==='auto'){
+    var elapsed=now-demoStartTime;
+    if(demoState===0){
+      // S0: 全灰视觉覆盖（1秒）—— 不改底层status，用覆盖层变暗
+      // 每帧都执行初始化（幂等操作，安全）
+      demoDimOverlay=true;
+      demoLitSet={};
+      faultTriggered=false;fixStarted=false;fixStartTime=0;
+      phase2aDone=false;phase2bDone=false;
+      if(elapsed>1000){
+        demoState=1;demoStartTime=now;lightIndex=-1;faultAt=-1;
+        // 计算执行顺序
+        executionOrder=getExecutionOrder();
+        executionOrder.reverse(); // 反转：从程序入口（底）→项目完成（顶）
+        // 随机选一个故障位置（包括首尾）
+        faultAt=Math.floor(Math.random()*executionOrder.length);
+      }
+    } else if(demoState===1){
+      // S1: 逐步点亮（800ms/节点）—— 遇到故障→立刻修复→继续点亮→全部绿=完成
+      // 防御：确保 executionOrder 有效
+      if(!executionOrder||executionOrder.length===0){
+        console.warn('[Fusang Demo] S1: executionOrder 为空，重新计算');
+        executionOrder=getExecutionOrder();
+        if(!executionOrder||executionOrder.length===0){demoState=5;demoStartTime=now;}
+      }
+      var safeLen=Math.max(executionOrder.length,1);
+
+      // 子阶段 A：正常点亮（还没到故障位置）
+      if(!faultTriggered){
+        var targetLight=Math.min(Math.floor(elapsed/800), safeLen-1);
+        // 点亮范围不超过 faultAt（遇到故障就停）
+        var maxBeforeFault=(faultAt>=0)?Math.min(targetLight,faultAt-1):targetLight;
+        if(maxBeforeFault>lightIndex){
+          for(var i=lightIndex+1;i<=maxBeforeFault&&i<executionOrder.length;i++){
+            demoLitSet[executionOrder[i]]=true;
+          }
+          lightIndex=maxBeforeFault;
+        }
+        // 到达故障位置？
+        if(faultAt>=0&&lightIndex>=faultAt-1&&!faultTriggered){
+          // 点亮故障节点本身 + 注入红色
+          demoLitSet[executionOrder[faultAt]]=true;
+          var ft=taskById(executionOrder[faultAt]);
+          if(ft){ft.status='blocked';ft.error={message:{zh:'演示故障',en:'Demo fault'},file:'',line:1,callChain:[]};recalcAll();}
+          lightIndex=faultAt;
+          faultTriggered=true;
+          fixStartTime=now; // 记录故障注入时间
+          // 等待1秒让观众看到红灯，然后自动开始修复
+        }
+        // 无故障情况：全部点亮完直接完成
+        if(lightIndex>=safeLen-1&&(faultAt<0||faultAt>=safeLen)){
+          demoDimOverlay=false;
+          demoState=5;demoStartTime=now;
+        }
+      }
+
+      // 子阶段 B：等待1秒展示红灯，然后自动修复
+      if(faultTriggered&&!fixStarted){
+        if(now-fixStartTime>1000){ // 红灯展示1秒
+          var redN=tasks.find(function(t){return t.status==='blocked';});
+          if(redN){startFixAnimation(redN.id,'ai');fixStarted=true;}
+        }
+      }
+
+      // 子阶段 C：修复完成后继续点亮后续节点
+      if(fixStarted&&fixAnimations.length===0){
+        var postFixElapsed=now-(fixStartTime+1000+(fixStarted?2000:0));
+        var targetLight2=Math.min(Math.floor(postFixElapsed/800)+faultAt, safeLen-1);
+        if(targetLight2>lightIndex){
+          for(var i=lightIndex+1;i<=targetLight2&&i<executionOrder.length;i++){
+            demoLitSet[executionOrder[i]]=true;
+          }
+          lightIndex=targetLight2;
+        }
+        // 全部点亮完成！
+        if(lightIndex>=safeLen-1){
+          demoDimOverlay=false;
+          demoState=5;demoStartTime=now;
+        }
+      }
+    } else if(demoState===5){
+      // Phase 1 完成！全绿欣赏时间（3秒）
+      demoDimOverlay=false;
+      if(elapsed>3000){
+        demoState=6;demoStartTime=now;
+        // 随机1-2个节点变红（运行时单点故障）
+        var count=1+Math.floor(Math.random()*2); // 1-2
+        repairQueue=[];
+        for(var j=0;j<count;j++){
+          var candidates=tasks.filter(function(t){return t.id!=='goal'&&repairQueue.indexOf(t.id)===-1;});
+          if(candidates.length===0) break;
+          var idx=Math.floor(Math.random()*candidates.length);
+          var t=candidates[idx];
+          t.status='blocked';t.error={message:{zh:'运行时故障',en:'Runtime fault'},file:'',line:1,callChain:[]};
+          repairQueue.push(t.id);
+        }
+      }
+    } else if(demoState===6){
+      // S6: 单点故障展示（2秒让观众看清红点）
+      demoDimOverlay=false;
+      if(elapsed>2000){
+        demoState=7;demoStartTime=now;repairIndex=0;
+      }
+    } else if(demoState===7){
+      // S7: 逐个修复单点故障（每个修完后等一下）
+      if(repairIndex<repairQueue.length){
+        var rNodeId=repairQueue[repairIndex];
+        var rNode=taskById(rNodeId);
+        if(rNode&&rNode.status==='blocked'&&!fixAnimations.find(function(f){return f.nodeId===rNodeId;})){
+          startFixAnimation(rNodeId,'ai');
+          repairIndex++;
+        } else if(!rNode||rNode.status!=='blocked'){
+          repairIndex++;
+        }
+      }
+      // 所有都修完了 → 等2秒展示全绿
+      if(repairIndex>=repairQueue.length&&fixAnimations.length===0){
+        if(!phase2aDone) phase2aDone=true;
+        if(elapsed>2000||phase2aDone&&(elapsed>500)){ // 至少等2秒
+          demoState=8;demoStartTime=now;
+          phase2aDone=false;
+          // 随机3-5个节点变红（批量多点故障）
+          var count2=3+Math.floor(Math.random()*3); // 3-5
+          repairQueue=[];
+          for(var k=0;k<count2;k++){
+            var candidates2=tasks.filter(function(t){return t.id!=='goal'&&repairQueue.indexOf(t.id)===-1;});
+            if(candidates2.length===0) break;
+            var idx2=Math.floor(Math.random()*candidates2.length);
+            var t2=candidates2[idx2];
+            t2.status='blocked';t2.error={message:{zh:'批量故障',en:'Batch fault'},file:'',line:1,callChain:[]};
+            repairQueue.push(t2.id);
+          }
+        }
+      }
+    } else if(demoState===8){
+      // S8: 多点故障展示（2.5秒让观众看清多个红点）
+      demoDimOverlay=false;
+      if(elapsed>2500){
+        demoState=9;demoStartTime=now;repairIndex=0;
+      }
+    } else if(demoState===9){
+      // S9: 逐个修复多点故障
+      if(repairIndex<repairQueue.length){
+        var rNodeId2=repairQueue[repairIndex];
+        var rNode2=taskById(rNodeId2);
+        if(rNode2&&rNode2.status==='blocked'&&!fixAnimations.find(function(f){return f.nodeId===rNodeId2;})){
+          startFixAnimation(rNodeId2,'ai');
+          repairIndex++;
+        } else if(!rNode2||rNode2.status!=='blocked'){
+          repairIndex++;
+        }
+      }
+      // 所有都修完了 → 等3秒展示最终全绿
+      if(repairIndex>=repairQueue.length&&fixAnimations.length===0){
+        if(!phase2bDone) phase2bDone=true;
+        if(elapsed>3000||phase2bDone&&(elapsed>500)){
+          demoState=10;demoStartTime=now;
+          phase2bDone=false;
+        }
+      }
+    } else if(demoState===10){
+      // S10: 最终全绿庆祝（3秒）→ 循环回S0（继续演示）
+      demoDimOverlay=false;
+      if(elapsed>3000){
+        demoState=0;demoStartTime=now;
+        resetToAllGreen();
+      }
+    }
+  }
+
+  // ====== 探伤模式演示状态机（v1.9）======
+  if(currentMode==='probe'){
+    var pElapsed=now-probeStartTime;
+    switch(probeDemoState){
+      case 0: // PS0: 准备阶段（1.5s）— 全暗覆盖 + 提示
+        demoDimOverlay=true;
+        demoLitSet={};
+        probeScanProgress=0;
+        if(pElapsed>1500){
+          probeDemoState=1;probeStartTime=now;
+          // 随机选 2-8 个节点作为"问题节点"
+          var allIds=tasks.map(function(t){return t.id;});
+          var count=2+Math.floor(Math.random()*7); // 2-8
+          // Fisher-Yates 洗牌后取前 count 个
+          for(var i=allIds.length-1;i>0;i--){
+            var j=Math.floor(Math.random()*(i+1));
+            var tmp=allIds[i];allIds[i]=allIds[j];allIds[j]=tmp;
+          }
+          probeProblemNodes=allIds.slice(0,count);
+          probeCurrentNodeIdx=0;
+          probeFixQueue=probeProblemNodes.slice();
+          console.log('[Fusang Probe] 问题节点:',probeProblemNodes);
+        }
+        break;
+      case 1: // PS1: 扫描阶段（3s）— 模拟扫描进度
+        demoDimOverlay=false;
+        probeScanProgress=Math.min(100, Math.floor(pElapsed/30));
+        // 扫描进度条在 drawProbeUI 中绘制
+        if(pElapsed>3000){
+          probeDemoState=2;probeStartTime=now;
+          // 将问题节点的 quality 数据标记为"已发现"
+          probeProblemNodes.forEach(function(nid){
+            demoLitSet[nid]=true; // 高亮问题节点
+          });
+        }
+        break;
+      case 2: // PS2: 展现结果（持续4s）— 显示所有问题节点
+        // 保持问题节点高亮
+        probeProblemNodes.forEach(function(nid){demoLitSet[nid]=true;});
+        if(pElapsed>4000){
+          probeDemoState=3;probeStartTime=now;
+          probeCurrentNodeIdx=0;
+        }
+        break;
+      case 3: // PS3: 逐一聚焦问题（每节点1.5s）
+        probeProblemNodes.forEach(function(nid,i){demoLitSet[nid]=(i<=probeCurrentNodeIdx);});
+        if(pElapsed>1500){
+          probeCurrentNodeIdx++;
+          probeStartTime=now;
+          if(probeCurrentNodeIdx>=probeProblemNodes.length){
+            probeDemoState=4;probeStartTime=now;
+            probeCurrentNodeIdx=0;
+          }
+        }
+        break;
+      case 4: // PS4: 模拟修复（每节点0.8s变绿）
+        if(pElapsed>800){
+          var nid=probeFixQueue[probeCurrentNodeIdx];
+          if(nid){
+            // 从问题列表移除（模拟修复完成）
+            probeFixQueue.splice(probeCurrentNodeIdx,1);
+            // 不需要 splice 索引保持，直接++
+          }
+          probeCurrentNodeIdx++;
+          probeStartTime=now;
+          if(probeCurrentNodeIdx>=probeFixQueue.length+probeProblemNodes.length-probeFixQueue.length){
+            probeDemoState=5;probeStartTime=now;
+          }
+        }
+        // 还没修复的保持高亮
+        for(var pi=probeCurrentNodeIdx;pi<probeProblemNodes.length;pi++){
+          demoLitSet[probeProblemNodes[pi]]=true;
+        }
+        break;
+      case 5: // PS5: 全绿庆祝（2.5s）
+        demoDimOverlay=false;
+        demoLitSet={};
+        if(pElapsed>2500){
+          probeDemoState=0;probeStartTime=now;
+          resetToAllGreen();
+        }
+        break;
+    }
+  }
+
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  ctx.translate(treeOffsetX, treeOffsetY);
+  ctx.scale(treeScale, treeScale);
+
+  // 0. 底座
+  drawPedestal();
+
+  // 0.5 树根（展开时）
+  if(rootsExpanded) drawRoots();
+
+  // 1. 连线
+  drawEdges();
+  // 1.2 边级逆流粒子
+  drawEdgeParticles();
+
+  // 2. 节点
+  drawNodes();
+
+  // 2.3 盘龙（在节点上层，不被遮挡）
+  drawDragon();
+
+  // 2.5 修复庆祝动画（粒子/辉光在节点上层）
+  drawFixAnimations();
+
+  // 3. 金乌 / 花苞 / 转场动画
+  drawJinwuAndBuds();
+
+  // 4. 脉冲动画
+  drawPulses();
+
+  // 5. 树顶皇冠
+  drawCrown();
+  ctx.restore();
+
+  // 6. 信息卡片
+  if(selectedNode) drawInfoCard(selectedNode);
+
+  // 7. 图例
+  drawLegend();
+
+  // 7.5 探伤模式 UI（v1.9 新增）
+  if(currentMode==='probe'){
+    ctx.save();
+    ctx.setTransform(1,0,0,1,0,0);
+    // 顶部扫描进度条
+    if(probeDemoState===1){
+      var barW=Math.min(W*0.6,500);
+      var barX=(W-barW)/2;
+      var barY=6;
+      var barH=4;
+      ctx.fillStyle='rgba(48,54,61,0.9)';
+      ctx.fillRect(barX,barY,barW,barH);
+      var fillW=barW*probeScanProgress/100;
+      var grad=ctx.createLinearGradient(barX,0,barX+fillW,0);
+      grad.addColorStop(0,'#58a6ff');grad.addColorStop(1,'#1f6feb');
+      ctx.fillStyle=grad;
+      ctx.fillRect(barX,barY,Math.max(fillW,2),barH);
+      // 文字提示
+      ctx.fillStyle='#c9d1d9';
+      ctx.font='11px -apple-system,PingFang SC,sans-serif';
+      ctx.textAlign='center';
+      ctx.fillText(lang==='zh'?'🔬 正在扫描代码...':'🔬 Scanning code...',W/2,22);
+    }
+    // 跳过按钮（右上角区域）
+    if(probeDemoState>=0 && probeDemoState<=3){
+      var skipBtnX=W-90;var skipBtnY=42;
+      var btnW=78;var btnH=24;
+      ctx.fillStyle='rgba(33,38,45,0.85)';
+      roundRect(ctx,skipBtnX-btnW/2,skipBtnY-btnH/2,btnW,btnH,4);
+      ctx.fill();
+      ctx.strokeStyle='rgba(139,148,158,0.5)';ctx.lineWidth=1;
+      ctx.stroke();
+      ctx.fillStyle='#8b949e';
+      ctx.font='11px -apple-system,PingFang SC,sans-serif';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(lang==='zh'?'⏭ 跳过演示':'⏭ Skip Demo',skipBtnX,skipBtnY);
+    }
+    // 状态文字
+    if(probeDemoState===2){
+      ctx.fillStyle='#f85149';ctx.font='bold 13px -apple-system,PingFang SC,sans-serif';
+      ctx.textAlign='center';ctx.textBaseline='top';
+      ctx.fillText(lang==='zh'?'⚠ 发现 '+probeProblemNodes.length+' 个问题':'⚠ '+probeProblemNodes.length+' issues found',W/2,42);
+    } else if(probeDemoState===4){
+      ctx.fillStyle='#56d364';ctx.font='12px -apple-system,PingFang SC,sans-serif';
+      ctx.textAlign='center';ctx.textBaseline='top';
+      ctx.fillText(lang==='zh'?'✨ 正在修复...':'✨ Fixing...',W/2,42);
+    } else if(probeDemoState===5){
+      ctx.fillStyle='#56d364';ctx.font='bold 14px -apple-system,PingFang SC,sans-serif';
+      ctx.textAlign='center';ctx.textBaseline='top';
+      ctx.fillText(lang==='zh'?'✅ 代码健康评分：100分':'✅ Health Score: 100',W/2,42);
+    }
+    ctx.restore();
+  }
+
+  // 8. 标题（动态版本号，大气排版）
+  ctx.fillStyle='#c9d1d9';
+  ctx.font='bold 12px -apple-system,PingFang SC,sans-serif';
+  ctx.textAlign='left';
+  ctx.textBaseline='top';
+  var titleLine1=i18n[lang].versionTitle;
+  var titleLine2=i18n[lang].title;  ctx.fillText(titleLine1, 12, 8);
+  ctx.font='11px -apple-system,PingFang SC,sans-serif';
+  ctx.fillText(titleLine2, 12, 26);
+
+  // 清理过期动画
+  cleanupAnimations();
+
+  // 调试模式超时检测：8秒无点击 → 返回演示
+  if(currentMode==='interactive' && now - lastClickTime > 8000){
+    hideNodeMenu(); // 超时前先关闭菜单
+    setMode('auto');
+  }
+
+  // V4：高亮节点动画（金色光晕 3 秒）
+  if(highlightNodeId&&highlightNodeStart>0){
+    var elapsed=now-highlightNodeStart;
+    if(elapsed<3000){
+      var node=nodeById(highlightNodeId);
+      if(node){
+        var glow=easeOut(1-elapsed/3000); // 0→1 淡出
+        ctx.save();
+        ctx.shadowColor='rgba(212,167,44,'+(0.8*glow)+')';
+        ctx.shadowBlur=20*glow;
+        ctx.strokeStyle='rgba(212,167,44,'+(0.6*glow)+')';
+        ctx.lineWidth=3;
+        ctx.beginPath();
+        ctx.arc(node.x,node.y,NH,0,Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    } else {
+      highlightNodeId=null;
+      highlightNodeStart=0;
+    }
+  }
+
+  // 全局视觉反馈：外部信号接入成功时的闪烁+光晕
+  if(globalFlashStart>0){
+    var fElapsed=now-globalFlashStart;
+    if(fElapsed<2000){
+      // 闪烁效果：全屏白色覆盖层，alpha 呼吸闪烁
+      var flashAlpha=0.25+0.15*Math.sin(now/80);
+      ctx.save();
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.fillStyle='rgba(255,255,255,'+flashAlpha+')';
+      ctx.fillRect(0,0,W,H);
+      ctx.restore();
+    } else {
+      globalFlashStart=0; // 2秒后停止闪烁
+    }
+  }
+  if(globalGlowStart>0){
+    var gElapsed=now-globalGlowStart;
+    if(gElapsed<3000){
+      // 光晕效果：树外围金色发光
+      var glow=easeOut(1-gElapsed/3000);
+      ctx.save();
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.shadowColor='rgba(212,167,44,'+(0.7*glow)+')';
+      ctx.shadowBlur=40*glow;
+      ctx.strokeStyle='rgba(212,167,44,'+(0.3*glow)+')';
+      ctx.lineWidth=2;
+      ctx.beginPath();
+      ctx.ellipse(W/2,H/2,W*0.38,H*0.32,0,0,Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      globalGlowStart=0; // 3秒后停止光晕
+    }
+  }
+
+  // ★ 超时自动退出检测
+  // 1) 接入模式空闲：3分钟无任何操作 → 退回演示模式
+  if(currentMode==='real' && accessModeLastActive>0 && now-accessModeLastActive>3*60*1000){
+    console.log('[Fusang] ⏱️ 接入模式空闲3分钟，自动退回演示模式');
+    setMode('auto'); // 直接切回演示模式（会自动收起面板+恢复按钮）
+  }
+  // 2) 外部信号断开：parentReady后3分钟无新信号 → 断开处理
+  if(parentReady && lastExtSignalTime>0 && now-lastExtSignalTime>3*60*1000){
+    handleDisconnect();
+  }
+
+  requestAnimationFrame(draw);
+  }catch(err){ console.error('[draw] JS Error:', err.message, err.stack); }
+}
+
+// ====== 连线绘制 ======
+function drawEdges(){
+  edges.forEach(function(e){
+    var from=nodeById(e.from),to=nodeById(e.to);
+    if(!from||!to) return;
+    var fy=from.y-NH/2, ty=to.y+NH/2;
+    var my=(fy+ty)/2;
+
+    // 连线颜色：from节点状态色（淡化），堵点边红色
+    var fromTask=taskById(e.from);
+    var toTask=taskById(e.to);
+    var edgeColor='#30363d';
+    if(fromTask&&(fromTask.status==='done'||fromTask.status==='in-progress')){
+      edgeColor=SC[fromTask.status]+'80';
+    }
+    if((fromTask&&fromTask.status==='blocked')||(toTask&&toTask.status==='blocked')){
+      edgeColor='#f85149';
+    }
+
+    ctx.strokeStyle=edgeColor;
+    ctx.lineWidth=((fromTask&&fromTask.status==='blocked')||(toTask&&toTask.status==='blocked'))?3:2;
+    ctx.beginPath();
+    ctx.moveTo(from.x,fy);
+    ctx.bezierCurveTo(from.x,my,to.x,my,to.x,ty);
+    ctx.stroke();
+
+    // 箭头
+    ctx.fillStyle=edgeColor;
+    ctx.beginPath();
+    ctx.moveTo(to.x,ty);
+    ctx.lineTo(to.x-5,ty-8);
+    ctx.lineTo(to.x+5,ty-8);
+    ctx.closePath();
+    ctx.fill();
+  });
+}
+
+// ====== 边级逆流粒子 ======
+function drawEdgeParticles(){
+  // 维护粒子数组：自动补充新粒子（只在堵点边上）
+  var blockedEdges=edges.filter(function(e){
+    var fromTask=taskById(e.from),toTask=taskById(e.to);
+    return (fromTask&&fromTask.status==='blocked')||(toTask&&toTask.status==='blocked');
+  });
+  edgeParticles=edgeParticles.filter(function(p){return p.t<1;});
+  blockedEdges.forEach(function(e){
+    if(!edgeParticles.some(function(p){return p.edge===e;})){
+      edgeParticles.push({edge:e,t:0,speed:0.005+Math.random()*0.005});
+    }
+  });
+  // 绘制 & 更新粒子
+  edgeParticles.forEach(function(p){
+    p.t+=p.speed;
+    if(p.t>=1) return;
+    var from=nodeById(p.edge.from),toN=nodeById(p.edge.to);
+    if(!from||!toN) return;
+    var fy=from.y-NH/2,ty=toN.y+NH/2,my=(fy+ty)/2;
+    var posT=1-p.t; // 逆流：t=0在to，t=1在from
+    var mt=1-posT;
+    var x=mt*mt*mt*from.x+3*mt*mt*posT*from.x+3*mt*posT*posT*toN.x+posT*posT*posT*toN.x;
+    var y=mt*mt*mt*fy+3*mt*mt*posT*my+3*mt*posT*posT*my+posT*posT*posT*ty;
+    var alpha=0.5+0.5*Math.sin(p.t*Math.PI);
+    ctx.fillStyle='rgba(248,81,73,'+alpha+')';
+    ctx.beginPath();
+    ctx.arc(x,y,2,0,Math.PI*2);
+    ctx.fill();
+  });
+}
+
+// ====== 节点绘制 ======
+function drawNodes(){
+  layoutNodes.forEach(function(n){
+    var x=n.x-NW/2,y=n.y-NH/2;
+    var isHover=hoveredNode&&hoveredNode.id===n.id;
+    var isSel=selectedNode&&selectedNode.id===n.id;
+    var realStatus=getEffectiveStatus(n.id);
+
+    // Hover: 外发光效果
+    if(isHover&&!isSel){
+      ctx.save();
+      ctx.shadowColor=SC[realStatus];
+      ctx.shadowBlur=15;
+      ctx.fillStyle='rgba(255,255,255,0.04)';
+      ctx.beginPath();
+      ctx.roundRect(x-2,y-2,NW+4,NH+4,10);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 背景
+    ctx.fillStyle=isHover?SC[realStatus]+'55':SC[realStatus]+'38';
+    ctx.beginPath();
+    ctx.roundRect(x,y,NW,NH,8);
+    ctx.fill();
+
+    // 边框
+    ctx.strokeStyle=isHover||isSel?'#ffffff':SC[realStatus];
+    ctx.lineWidth=isHover||isSel?2.5:1.5;
+    if(isHover) { ctx.shadowColor='#fff'; ctx.shadowBlur=8; }
+    ctx.stroke();
+    ctx.shadowBlur=0; // reset shadow
+
+    // ====== 代码探伤仪：质量问题叠加显示 (v1.9) ======
+    var qIssue=getWorstQualityIssue(n.id);
+    if(qIssue){
+      // 质量问题边框（双色：外圈质量色 + 内圈状态色）
+      ctx.strokeStyle=qIssue.border;
+      ctx.lineWidth=2.5;
+      ctx.stroke();
+      // 质量问题脉冲动画（类似阻塞节点闪烁，但用质量色）
+      var qa=0.3+0.4*Math.abs(Math.sin(now/400+n.id.charCodeAt(0)%10));
+      ctx.strokeStyle=qIssue.color+Math.round(qa*255).toString(16).padStart(2,'0');
+      ctx.lineWidth=1.5;
+      ctx.roundRect(x-3,y-3,NW+6,NH+6,10);
+      ctx.stroke();
+    }
+
+    // 阻塞节点：红色边框闪烁
+    if(realStatus==='blocked'){
+      var flashAlpha=0.4+0.6*Math.abs(Math.sin(now/250));
+      ctx.strokeStyle='rgba(248,81,73,'+flashAlpha+')';
+      ctx.lineWidth=2.5+flashAlpha*2;
+      ctx.stroke();
+    }
+
+    // goal 节点金色边框 + 皇冠
+    if(n.isGoal){
+      ctx.strokeStyle='#d4a72c';
+      ctx.lineWidth=2;
+      ctx.stroke();
+      // 皇冠（节点上方，放大版）
+      var crownY=n.y-NH/2-24;
+      ctx.font='22px sans-serif';
+      ctx.textAlign='center';
+      ctx.textBaseline='middle';
+      ctx.fillText('👑',n.x,crownY);
+    }
+
+    // 文字
+    ctx.fillStyle='#e6edf3';
+    ctx.font=(isHover||isSel?'bold ':'')+'12px -apple-system,PingFang SC,sans-serif';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText(n.label[lang],n.x,n.y);
+
+    // 代码探伤仪：质量问题角标 (v1.9)
+    if(qIssue){
+      var badgeX=x+NW/2-14,badgeY=y-NH/2+4;
+      ctx.font='bold 10px sans-serif';
+      var icons={'highCoupling':'🔴','deepNesting':'🟠','circularDep':'🟣','deadCode':'⚪','largeFunc':'🟡','noErrorHandling':'⚡'};
+      ctx.fillText(icons[qIssue.type]||'⚠️',badgeX,badgeY);
+    }
+
+    // 堵点效果：红色脉冲光环 + 边框闪烁
+    if(realStatus==='blocked'){
+      var pulsePhase=now/300;
+      var pulseAlpha=0.4+0.6*Math.abs(Math.sin(pulsePhase));
+      var pulseR=Math.max(NW,NH)/2+10+pulseAlpha*22;
+
+      // 大圈红色光晕（呼吸扩散）
+      var grad=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,pulseR+18);
+      grad.addColorStop(0,'rgba(248,81,73,0)');
+      grad.addColorStop(0.35,'rgba(248,81,73,'+(pulseAlpha*0.5)+')');
+      grad.addColorStop(0.7,'rgba(248,81,73,'+(pulseAlpha*0.15)+')');
+      grad.addColorStop(1,'rgba(248,81,73,0)');
+      ctx.fillStyle=grad;
+      ctx.beginPath();
+      ctx.arc(n.x,n.y,pulseR+18,0,Math.PI*2);
+      ctx.fill();
+
+      // 外圈红色脉冲环（较淡）
+      ctx.strokeStyle='rgba(248,81,73,'+(pulseAlpha*0.6)+')';
+      ctx.lineWidth=1.5+pulseAlpha*1.5;
+      ctx.beginPath();
+      ctx.arc(n.x,n.y,pulseR+6,0,Math.PI*2);
+      ctx.stroke();
+
+      // 内圈红色脉冲环（较亮）
+      ctx.strokeStyle='rgba(248,81,73,'+pulseAlpha+')';
+      ctx.lineWidth=2+pulseAlpha*2;
+      ctx.beginPath();
+      ctx.arc(n.x,n.y,pulseR-4,0,Math.PI*2);
+      ctx.stroke();
+
+      // 堵点图标背景圆
+      ctx.fillStyle='rgba(248,81,73,'+(pulseAlpha*0.8)+')';
+      ctx.beginPath();
+      ctx.arc(n.x,n.y-NH/2-13,9,0,Math.PI*2);
+      ctx.fill();
+      // 堵点图标（感叹号）
+      ctx.fillStyle='rgba(255,255,255,'+pulseAlpha+')';
+      ctx.font='bold 13px sans-serif';
+      ctx.textAlign='center';
+      ctx.textBaseline='middle';
+      ctx.fillText('!',n.x,n.y-NH/2-13);
+    }
+
+    // 演示模式覆盖层：未点亮的节点变暗
+    if(demoDimOverlay&&!demoLitSet[n.id]){
+      var ox=n.x-NW/2,oy=n.y-NH/2;
+      ctx.fillStyle='rgba(13,17,23,0.75)'; // 暗色覆盖
+      ctx.beginPath();
+      ctx.roundRect(ox,oy,NW,NH,8);
+      ctx.fill();
+      // 文字也覆盖暗化
+      ctx.fillStyle='rgba(110,118,129,0.9)';
+      ctx.font='11px -apple-system,PingFang SC,sans-serif';
+      ctx.textAlign='center';
+      ctx.textBaseline='middle';
+      var oLabel=n.label?n.label[lang]||n.label.zh||n.id:n.id;
+      ctx.fillText(oLabel,n.x,n.y);
+    }
+  });
+}
+
+// ====== 金乌 & 花苞 ======
+function drawJinwuAndBuds(){
+  layoutNodes.forEach(function(n){
+    if(n.id==='goal') return;
+
+    var budY=n.y-NH/2-22;
+    // 从 tasks 取实时状态（layoutNodes 是 layout() 时的快照）
+    var realStatus=getEffectiveStatus(n.id);
+
+    // 检查是否有转场动画进行中
+    var trans=budTransitions.find(function(t){return t.id===n.id;});
+
+    if(trans){
+      // 转场动画中
+      var elapsed=now-trans.startTime;
+      var progress=Math.min(1,elapsed/trans.duration);
+      drawTransition(n.x,budY,12,easeInOut(progress));
+      if(progress>=1&&!trans.done){
+        trans.done=true;
+        // 转场完成，更新状态
+        var task=taskById(n.id);
+        if(task) task.status='in-progress';
+        // 触发脉冲
+        jinwuPulses.push({id:n.id,startTime:now,x:n.x,y:budY,duration:600});
+        // 同步 layoutNodes 状态
+        n.status='in-progress';
+      }
+    } else if(realStatus==='waiting'){
+      // 花苞（预留接口）
+      drawBud(n.x,budY,12);
+    } else if(realStatus==='done'||realStatus==='in-progress'){
+      // 金乌
+      var active=realStatus==='done';
+      var breathe=active?1+0.08*Math.sin(now/800):1;
+      drawJinwu(n.x,budY,12*breathe,active);
+    }
+    // todo/blocked: 无金乌无花苞
+  });
+}
+
+// ====== 花苞绘制 ======
+function drawBud(x,y,size){
+  // 半透明花瓣，5瓣
+  var petalCount=5;
+  var petalSize=size*0.55;
+
+  // 外层光晕（淡紫）
+  var grad=ctx.createRadialGradient(x,y,0,x,y,size);
+  grad.addColorStop(0,'rgba(188,140,255,0.15)');
+  grad.addColorStop(1,'rgba(188,140,255,0)');
+  ctx.fillStyle=grad;
+  ctx.beginPath();
+  ctx.arc(x,y,size,0,Math.PI*2);
+  ctx.fill();
+
+  // 花瓣
+  for(var i=0;i<petalCount;i++){
+    var angle=Math.PI*2/petalCount*i-Math.PI/2;
+    var px=x+Math.cos(angle)*size*0.3;
+    var py=y+Math.sin(angle)*size*0.3;
+
+    ctx.fillStyle='rgba(188,140,255,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(px,py,petalSize,petalSize*0.5,angle,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  // 花苞核心（未开放的花心）
+  ctx.fillStyle='rgba(188,140,255,0.5)';
+  ctx.beginPath();
+  ctx.arc(x,y,size*0.25,0,Math.PI*2);
+  ctx.fill();
+
+  // "花苞" 标注
+  ctx.fillStyle='rgba(188,140,255,0.6)';
+  ctx.font='9px sans-serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText('Stub',x,y+size+8);
+}
+
+// ====== 花苞→金乌 转场动画 ======
+function drawTransition(x,y,size,progress){
+  // progress: 0=花苞, 1=金乌
+  var ep=easeInOut(progress);
+
+  // 花瓣消散
+  if(ep<0.5){
+    var petalAlpha=1-ep*2;
+    var petalCount=5;
+    var petalSize=size*0.55;
+    var spread=size*0.3+ep*size*0.8;
+
+    for(var i=0;i<petalCount;i++){
+      var angle=Math.PI*2/petalCount*i-Math.PI/2;
+      var px=x+Math.cos(angle)*spread;
+      var py=y+Math.sin(angle)*spread;
+
+      ctx.fillStyle='rgba(188,140,255,'+(petalAlpha*0.3)+')';
+      ctx.beginPath();
+      ctx.ellipse(px,py,petalSize*(1-ep),petalSize*0.5*(1-ep),angle,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // 金乌渐现
+  if(ep>0.3){
+    var jinwuAlpha=(ep-0.3)/0.7;
+    var jinwuSize=size*(0.5+jinwuAlpha*0.5);
+
+    // 光晕
+    var grad=ctx.createRadialGradient(x,y,0,x,y,jinwuSize);
+    grad.addColorStop(0,'rgba(240,208,96,'+(jinwuAlpha*0.6)+')');
+    grad.addColorStop(0.5,'rgba(212,167,44,'+(jinwuAlpha*0.2)+')');
+    grad.addColorStop(1,'rgba(212,167,44,0)');
+    ctx.fillStyle=grad;
+    ctx.beginPath();
+    ctx.arc(x,y,jinwuSize,0,Math.PI*2);
+    ctx.fill();
+
+    // 核心
+    ctx.fillStyle='rgba(240,208,96,'+jinwuAlpha+')';
+    ctx.beginPath();
+    ctx.arc(x,y,jinwuSize*0.35,0,Math.PI*2);
+    ctx.fill();
+
+    // 射线
+    if(jinwuAlpha>0.5){
+      var rayAlpha=(jinwuAlpha-0.5)*2;
+      for(var i=0;i<8;i++){
+        var a=Math.PI*2/8*i;
+        ctx.strokeStyle='rgba(240,208,96,'+rayAlpha+')';
+        ctx.lineWidth=1.5;
+        ctx.beginPath();
+        ctx.moveTo(x+Math.cos(a)*jinwuSize*0.45,y+Math.sin(a)*jinwuSize*0.45);
+        ctx.lineTo(x+Math.cos(a)*jinwuSize*0.75,y+Math.sin(a)*jinwuSize*0.75);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // 中间闪光
+  if(ep>0.4&&ep<0.7){
+    var flashAlpha=1-Math.abs(ep-0.55)/0.15;
+    flashAlpha=Math.max(0,Math.min(1,flashAlpha));
+    var flashGrad=ctx.createRadialGradient(x,y,0,x,y,size*1.5);
+    flashGrad.addColorStop(0,'rgba(255,255,255,'+(flashAlpha*0.4)+')');
+    flashGrad.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=flashGrad;
+    ctx.beginPath();
+    ctx.arc(x,y,size*1.5,0,Math.PI*2);
+    ctx.fill();
+  }
+}
+
+// ====== 金乌绘制 ======
+function drawJinwu(x,y,size,active){
+  var alpha=active?1:0.35;
+  // 光晕
+  var grad=ctx.createRadialGradient(x,y,0,x,y,size);
+  grad.addColorStop(0,'rgba(240,208,96,'+alpha*0.6+')');
+  grad.addColorStop(0.5,'rgba(212,167,44,'+alpha*0.2+')');
+  grad.addColorStop(1,'rgba(212,167,44,0)');
+  ctx.fillStyle=grad;
+  ctx.beginPath();
+  ctx.arc(x,y,size,0,Math.PI*2);
+  ctx.fill();
+  // 核心
+  ctx.fillStyle=active?'#f0d060':'rgba(212,167,44,0.5)';
+  ctx.beginPath();
+  ctx.arc(x,y,size*0.35,0,Math.PI*2);
+  ctx.fill();
+  // 8条射线
+  for(var i=0;i<8;i++){
+    var a=Math.PI*2/8*i;
+    ctx.strokeStyle=active?'#f0d060':'rgba(212,167,44,0.5)';
+    ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.moveTo(x+Math.cos(a)*size*0.45,y+Math.sin(a)*size*0.45);
+    ctx.lineTo(x+Math.cos(a)*size*0.75,y+Math.sin(a)*size*0.75);
+    ctx.stroke();
+  }
+}
+
+// ====== 脉冲动画 ======
+function drawPulses(){
+  jinwuPulses.forEach(function(p){
+    var elapsed=now-p.startTime;
+    var progress=elapsed/p.duration;
+    if(progress>1) return;
+
+    var ep=easeOut(progress);
+    var radius=12+ep*30;
+    var alpha=1-ep;
+
+    ctx.strokeStyle='rgba(240,208,96,'+(alpha*0.6)+')';
+    ctx.lineWidth=2*(1-ep);
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,radius,0,Math.PI*2);
+    ctx.stroke();
+
+    // 内圈
+    if(ep<0.5){
+      var innerAlpha=(1-ep*2)*0.3;
+      ctx.strokeStyle='rgba(255,255,255,'+innerAlpha+')';
+      ctx.lineWidth=1;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,radius*0.6,0,Math.PI*2);
+      ctx.stroke();
+    }
+  });
+}
+
+// ====== 清理过期动画 ======
+function cleanupAnimations(){
+  budTransitions=budTransitions.filter(function(t){
+    return now-t.startTime<t.duration+100;
+  });
+  jinwuPulses=jinwuPulses.filter(function(p){
+    return now-p.startTime<p.duration+100;
+  });
+}
+
+// ====== 动态计算节点有效状态（考虑依赖链）======
+// 返回: 'done'|'in-progress'|'todo'|'waiting'|'blocked'
+// blocked = 自身有 error（根因）；waiting = 上游有 blocked（被传导阻塞）
+function getEffectiveStatus(nodeId,visited){
+  visited=visited||{};
+  if(visited[nodeId]) return 'waiting';
+  visited[nodeId]=true;
+  var task=taskById(nodeId);
+  if(!task) return 'todo';
+  if(task.error) return 'blocked';
+  var depEdges=edges.filter(function(e){return e.to===nodeId;});
+  if(depEdges.length===0) {var s=task.status||'todo'; return s==='fixed'?'done':s;}
+  var anyBlocked=false, allDone=true;
+  for(var i=0;i<depEdges.length;i++){
+    var depStatus=getEffectiveStatus(depEdges[i].from,Object.assign({},visited));
+    if(depStatus==='blocked'){anyBlocked=true; break;}
+    if(depStatus!=='done') allDone=false;
+  }
+  if(anyBlocked) return 'waiting';
+  if(!allDone) return 'waiting';
+  var s=task.status||'todo';
+  return s==='fixed'?'done':s;
+}
+
+// ====== 修复庆祝动画 ======
+
+// 修复后全量重算：暴力多轮扫描直到稳定
+function recalcAll(){
+  for(var iter=0;iter<20;iter++){
+    var changed=false;
+    tasks.forEach(function(t){
+      if(t.error) return;
+      if(t.status==='done') return;
+      var ups=edges.filter(function(e){return e.to===t.id;});
+      if(ups.length===0) return;
+      var ok=ups.every(function(e){var u=taskById(e.from);return u&&u.status==='done'&&u.error==null;});
+      if(ok){var oldSt=t.status;t.status='done';t.error=null;changed=true;if(oldSt!=='done') sendStatusChange(t.id,oldSt,'done');}
+    });
+    if(!changed) break;
+  }
+}
+
+function injectFault(nodeId){
+  var task=taskById(nodeId);
+  if(!task){console.warn('[Fusang] task not found for '+nodeId); return;}
+  var oldStatus=task.status;
+  task.status='blocked';
+  task.error={message:{zh:'注入故障：模拟错误',en:'Injected fault: simulated error'},file:task.file||'',line:1,callChain:[]};
+  sendStatusChange(nodeId, oldStatus, 'blocked');
+  recalcAll();
+}
+
+function startFixAnimation(nodeId,type){
+  var task=taskById(nodeId);
+  if(task){
+    var oldStatus=task.status;
+    task.status='fixed';
+    sendStatusChange(nodeId, oldStatus, 'fixed');
+  }
+  fixAnimations.push({nodeId:nodeId,startTime:now,phase:'flash',type:type});
+}
+
+function drawFixAnimations(){
+  fixAnimations=fixAnimations.filter(function(f){
+    var elapsed=now-f.startTime;
+    if(elapsed>2100) return false;
+    if(f.phase==='flash'&&elapsed>=300){
+      f.phase='glow';
+      var task=taskById(f.nodeId);
+      if(task&&task.status==='fixed'){task.status='done';task.error=null;sendStatusChange(f.nodeId,'fixed','done');if(currentMode!=='real') recalcAll();}
+    }
+    if(f.phase==='glow'&&elapsed>=1100){
+      f.phase='particles';
+    }
+    return true;
+  });
+  fixAnimations.forEach(function(f){
+    var elapsed=now-f.startTime;
+    var node=nodeById(f.nodeId);
+    if(!node) return;
+    if(f.phase==='flash'){
+      var ep=1-elapsed/300;
+      var grad=ctx.createRadialGradient(node.x,node.y,0,node.x,node.y,40+ep*30);
+      grad.addColorStop(0,'rgba(255,255,255,'+(ep*0.6)+')');
+      grad.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle=grad;
+      ctx.beginPath();
+      ctx.arc(node.x,node.y,40+ep*30,0,Math.PI*2);
+      ctx.fill();
+    } else if(f.phase==='glow'){
+      var gep=(elapsed-300)/800;
+      var radius=20+gep*80;
+      var alpha=1-gep*0.8;
+      ctx.strokeStyle='rgba(63,185,80,'+alpha+')';
+      ctx.lineWidth=2+gep*3;
+      ctx.beginPath();
+      ctx.arc(node.x,node.y,radius,0,Math.PI*2);
+      ctx.stroke();
+    } else if(f.phase==='particles'){
+      var pep=(elapsed-1100)/1000;
+      if(!f.particles) f.particles=[];
+      while(f.particles.length<8){
+        f.particles.push({x:node.x+(Math.random()-0.5)*60, y:node.y, vy:-1-Math.random()*2, life:0});
+      }
+      f.particles.forEach(function(p){
+        p.life++;
+        p.y+=p.vy;
+        p.vy*=0.99;
+        var pa=Math.max(0,1-p.life/60);
+        ctx.fillStyle='rgba(240,208,96,'+pa+')';
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,2,0,Math.PI*2);
+        ctx.fill();
+      });
+    }
+  });
+}
+
+// ====== 底座 ======
+function drawPedestal(){
+  var cx=W/2, baseY=H-PED_H;
+  var mW=Math.min(400,W*0.5);
+
+  // 后山
+  ctx.fillStyle='#161b22';
+  ctx.beginPath();
+  ctx.moveTo(cx-mW/2,baseY);
+  ctx.lineTo(cx-mW*0.1,baseY-50);
+  ctx.lineTo(cx+mW*0.2,baseY);
+  ctx.closePath();
+  ctx.fill();
+
+  // 中山
+  ctx.fillStyle='#1c2129';
+  ctx.beginPath();
+  ctx.moveTo(cx-mW*0.4,baseY);
+  ctx.lineTo(cx+mW*0.05,baseY-38);
+  ctx.lineTo(cx+mW*0.5,baseY);
+  ctx.closePath();
+  ctx.fill();
+
+  // 前山
+  ctx.fillStyle='#21262d';
+  ctx.beginPath();
+  ctx.moveTo(cx-mW*0.6,baseY);
+  ctx.lineTo(cx-mW*0.15,baseY-28);
+  ctx.lineTo(cx+mW*0.35,baseY);
+  ctx.closePath();
+  ctx.fill();
+
+  // 底座平台
+  ctx.fillStyle='#21262d';
+  ctx.fillRect(cx-mW*0.6,baseY,mW*1.2,20);
+
+  // 底座顶部边线
+  ctx.strokeStyle='#30363d';
+  ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.moveTo(cx-mW*0.6,baseY);
+  ctx.lineTo(cx+mW*0.6,baseY);
+  ctx.stroke();
+
+  // 标注
+  ctx.fillStyle='#484f58';
+  ctx.font='10px sans-serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText(i18n[lang].pedestal, cx, baseY+10);
+
+  // 配置提示
+  ctx.fillStyle=rootsExpanded?'#d4a72c':'#6e7681';
+    ctx.font=(rootsExpanded?'bold ':'')+'10px sans-serif';
+    ctx.fillText(rootsExpanded?i18n[lang].roots.expanded:i18n[lang].roots.collapsed,cx,baseY-10);
+
+    // 堵点底座红闪
+    if(tasks.some(function(t){return t.status==='blocked';})){
+      var pulsePhase=now/600;
+      var pulseAlpha=0.2+0.8*Math.abs(Math.sin(pulsePhase));
+      var grad=ctx.createRadialGradient(cx,baseY,0,cx,baseY,120);
+      grad.addColorStop(0,'rgba(248,81,73,'+(pulseAlpha*0.3)+')');
+      grad.addColorStop(0.5,'rgba(248,81,73,0)');
+      grad.addColorStop(1,'rgba(248,81,73,0)');
+      ctx.fillStyle=grad;
+      ctx.beginPath();
+      ctx.arc(cx,baseY,120,0,Math.PI*2);
+      ctx.fill();
+    }
+}
+
+// ====== 树根（配置区）—— 紧凑横排 ======
+function drawRoots(){
+  var cx=W/2, baseY=H-PED_H;
+  var hasBlocked=tasks.some(function(t){return t.status==='blocked';});
+  var configs=[
+    {key:'ENV',val:'production'},
+    {key:'PORT',val:'3000'},
+    {key:'DB',val:'PostgreSQL'},
+    {key:'LOG',val:'stdout'}
+  ];
+  // 紧凑横排
+  var itemW=72, gap=4;
+  var rW=configs.length*itemW+(configs.length-1)*gap+12;
+  var rH=26;
+  var rx=cx-rW/2, ry=baseY+14;
+
+  ctx.fillStyle='rgba(13,17,23,0.92)';
+  ctx.beginPath();
+  ctx.roundRect(rx,ry,rW,rH,5);
+  ctx.fill();
+  ctx.strokeStyle='#30363d';
+  ctx.lineWidth=1;
+  ctx.stroke();
+
+  // 红色警告条（有故障时整行变红底）
+  if(hasBlocked){
+    ctx.fillStyle='rgba(248,81,73,0.12)';
+    ctx.beginPath();
+    ctx.roundRect(rx,ry,rW,rH,5);
+    ctx.fill();
+  }
+
+  // 横排显示：KEY=val 格式
+  configs.forEach(function(c,i){
+    var itemX=rx+6+i*(itemW+gap);
+    var cy=ry+rH/2;
+    ctx.fillStyle=hasBlocked?'#f85149':'#8b949e';
+    ctx.font='bold 9px monospace';
+    ctx.textAlign='left';
+    ctx.textBaseline='middle';
+    ctx.fillText(c.key+'='+c.val,itemX,cy);
+  });
+}
+
+// ====== 树顶皇冠 ======
+function drawCrown(){
+  var goalNode=nodeById('goal');
+  if(!goalNode) return;
+  var cx=goalNode.x, cy=goalNode.y-NH/2-40;
+  var s=14;
+
+  ctx.fillStyle='#d4a72c';
+  ctx.beginPath();
+  ctx.moveTo(cx-s,cy+10);
+  ctx.lineTo(cx+s,cy+10);
+  ctx.lineTo(cx+s-3,cy+3);
+  ctx.lineTo(cx-s+3,cy+3);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(cx-s+3,cy+3);
+  ctx.lineTo(cx-s+5,cy-8);
+  ctx.lineTo(cx-s/2,cy);
+  ctx.lineTo(cx,cy-12);
+  ctx.lineTo(cx+s/2,cy);
+  ctx.lineTo(cx+s-5,cy-8);
+  ctx.lineTo(cx+s-3,cy+3);
+  ctx.closePath();
+  ctx.fill();
+
+  var grad=ctx.createRadialGradient(cx,cy,0,cx,cy,25);
+  grad.addColorStop(0,'rgba(212,167,44,0.15)');
+  grad.addColorStop(1,'rgba(212,167,44,0)');
+  ctx.fillStyle=grad;
+  ctx.beginPath();
+  ctx.arc(cx,cy,25,0,Math.PI*2);
+  ctx.fill();
+}
+
+// ====== 盘龙：异常监控 Watchdog ======
+// 龙身路径：基于节点位置计算蜿蜒曲线控制点（一直显示，故障时变红脉冲）
+var dragonPathPts=[];  // [{x,y}, ...] 龙身路径采样点（用于粒子运动）
+
+function calcDragonPath(){
+  // 龙身经过每个节点附近，左右交替偏移形成盘绕效果
+  var pts=[];
+  // 按层分组 layoutNodes（有 x,y）
+  var layers={};
+  layoutNodes.forEach(function(n){
+    if(!layers[n.layer]) layers[n.layer]=[];
+    layers[n.layer].push(n);
+  });
+  var treeBottom=H-PED_H-PAD_TOP;
+
+  // 从底座开始
+  pts.push({x:W/2+30, y:treeBottom+10});
+
+  // 逐层向上，左右交替偏移
+  var maxL=0;
+  layoutNodes.forEach(function(n){if(n.layer>maxL)maxL=n.layer;});
+  for(var L=0;L<=maxL;L++){
+    var layerNodes=layers[L];
+    if(!layerNodes) continue;
+    // 本层节点平均x
+    var avgX=0;
+    layerNodes.forEach(function(n){avgX+=n.x;});
+    avgX/=layerNodes.length;
+    var y=treeBottom-L*LGAP-NH/2;
+    // 左右交替偏移
+    var offset=((L%2===0)?1:-1)*(40+Math.min(L*5,20));
+    pts.push({x:avgX+offset, y:y+NH/2+10});
+    // 层间过渡点
+    if(L<maxL){
+      var nextY=treeBottom-(L+1)*LGAP-NH/2;
+      var midY=(y+nextY)/2;
+      pts.push({x:avgX+offset*0.6, y:midY});
+    }
+  }
+
+  // 终点：树顶上方
+  var gn=nodeById('goal');
+  if(gn) pts.push({x:gn.x-20, y:gn.y-NH/2-30});
+
+  // 采样：在控制点之间插值，生成密集路径点（供粒子使用）
+  dragonPathPts=[];
+  for(var i=0;i<pts.length-1;i++){
+    var p0=pts[i], p1=pts[i+1];
+    var steps=Math.max(4,Math.round(Math.hypot(p1.x-p0.x,p1.y-p0.y)/8));
+    for(var s=0;s<=steps;s++){
+      var t=s/steps;
+      // 加一点正弦波动让龙身更自然
+      var wave=Math.sin(t*Math.PI*2)*3;
+      var perpX=-(p1.y-p0.y)/Math.hypot(p1.x-p0.x,p1.y-p0.y);
+      var perpY=(p1.x-p0.x)/Math.hypot(p1.x-p0.x,p1.y-p0.y);
+      dragonPathPts.push({
+        x:p0.x+(p1.x-p0.x)*t+perpX*wave,
+        y:p0.y+(p1.y-p0.y)*t+perpY*wave
+      });
+    }
+  }
+  return pts; // 返回控制点供绘制使用
+}
+
+function drawDragonBody(ctrlPts){
+  if(ctrlPts.length<2) return;
+  var hasBlocked=tasks.some(function(t){return t.status==='blocked';});
+  if(hasBlocked){
+    // 故障时：纯金色闪烁（无红色）
+    var pulse=0.3+0.7*Math.abs(Math.sin(now/400));
+    // 龙身：金色粗线
+    ctx.strokeStyle='rgba(212,167,44,'+pulse+')';
+    ctx.lineWidth=5;
+    ctx.lineCap='round';
+    ctx.lineJoin='round';
+    ctx.beginPath();
+    ctx.moveTo(ctrlPts[0].x,ctrlPts[0].y);
+    for(var i=1;i<ctrlPts.length;i++){
+      ctx.lineTo(ctrlPts[i].x,ctrlPts[i].y);
+    }
+    ctx.stroke();
+    // 金色亮边
+    ctx.strokeStyle='rgba(255,220,100,'+(pulse*0.7)+')';
+    ctx.lineWidth=2;
+    ctx.stroke();
+    // 鳞片：金色高光
+    if(dragonPathPts.length<2) return;
+    var step=14;
+    for(var i=0;i<dragonPathPts.length;i+=step){
+      var pt=dragonPathPts[i];
+      var angle=0;
+      if(i>0&&i<dragonPathPts.length-1){
+        var dx=dragonPathPts[i+1].x-dragonPathPts[i-1].x;
+        var dy=dragonPathPts[i+1].y-dragonPathPts[i-1].y;
+        angle=Math.atan2(dy,dx);
+      }
+      var ss=3;
+      ctx.fillStyle='#5a4a1a';
+      ctx.beginPath();
+      ctx.moveTo(pt.x+Math.cos(angle)*ss, pt.y+Math.sin(angle)*ss);
+      ctx.lineTo(pt.x+Math.cos(angle+Math.PI/2)*ss, pt.y+Math.sin(angle+Math.PI/2)*ss);
+      ctx.lineTo(pt.x+Math.cos(angle+Math.PI)*ss, pt.y+Math.sin(angle+Math.PI)*ss);
+      ctx.lineTo(pt.x+Math.cos(angle+3*Math.PI/2)*ss, pt.y+Math.sin(angle+3*Math.PI/2)*ss);
+      ctx.closePath();
+      ctx.fill();
+      // 金色闪烁点
+      ctx.fillStyle='rgba(255,220,100,'+(0.3+0.7*Math.abs(Math.sin(now/300+i*0.3)))+')';
+      ctx.beginPath();
+      ctx.arc(pt.x,pt.y,1.5,0,Math.PI*2);
+      ctx.fill();
+    }
+  } else {
+    // 无故障：原版黄绿色
+    ctx.strokeStyle='rgba(120,140,60,0.7)';
+    ctx.lineWidth=5;
+    ctx.lineCap='round';
+    ctx.lineJoin='round';
+    ctx.beginPath();
+    ctx.moveTo(ctrlPts[0].x,ctrlPts[0].y);
+    for(var i=1;i<ctrlPts.length;i++){
+      ctx.lineTo(ctrlPts[i].x,ctrlPts[i].y);
+    }
+    ctx.stroke();
+    ctx.strokeStyle='rgba(160,180,80,0.5)';
+    ctx.lineWidth=2;
+    ctx.stroke();
+    // 鳞片：沿路径等距采样画小菱形
+    if(dragonPathPts.length<2) return;
+    var step=14;
+    for(var i=0;i<dragonPathPts.length;i+=step){
+      var pt=dragonPathPts[i];
+      var angle=0;
+      if(i>0&&i<dragonPathPts.length-1){
+        var dx=dragonPathPts[i+1].x-dragonPathPts[i-1].x;
+        var dy=dragonPathPts[i+1].y-dragonPathPts[i-1].y;
+        angle=Math.atan2(dy,dx);
+      }
+      var ss=3;
+      ctx.fillStyle='#3a4a2a';
+      ctx.beginPath();
+      ctx.moveTo(pt.x+Math.cos(angle)*ss, pt.y+Math.sin(angle)*ss);
+      ctx.lineTo(pt.x+Math.cos(angle+Math.PI/2)*ss, pt.y+Math.sin(angle+Math.PI/2)*ss);
+      ctx.lineTo(pt.x+Math.cos(angle+Math.PI)*ss, pt.y+Math.sin(angle+Math.PI)*ss);
+      ctx.lineTo(pt.x+Math.cos(angle+3*Math.PI/2)*ss, pt.y+Math.sin(angle+3*Math.PI/2)*ss);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+}
+
+function drawDragonEye(){
+  // 龙眼位置：树顶附近
+  var goalN=nodeById('goal');
+  if(!goalN) return;
+  var ex=goalN.x-20, ey=goalN.y-NH/2-50;
+  var eyeR=4;
+
+  // 检查是否有阻塞节点 → 龙眼红色快闪
+  var hasBlocked=tasks.some(function(t){return t.status==='blocked';});
+  var eyeColor=hasBlocked?'#ff4444':'#d4a72c';
+  var pulse=hasBlocked?(0.5+0.5*Math.sin(now/150)):(0.7+0.3*Math.sin(now/600));
+
+  // 左眼
+  var grad=ctx.createRadialGradient(ex-5,ey,0,ex-5,ey,eyeR*2);
+  grad.addColorStop(0,'rgba(255,255,200,'+pulse+')');
+  grad.addColorStop(0.5,eyeColor);
+  grad.addColorStop(1,'rgba(74,90,58,0)');
+  ctx.fillStyle=grad;
+  ctx.beginPath();
+  ctx.arc(ex-5,ey,eyeR*2,0,Math.PI*2);
+  ctx.fill();
+
+  // 右眼
+  grad=ctx.createRadialGradient(ex+5,ey,0,ex+5,ey,eyeR*2);
+  grad.addColorStop(0,'rgba(255,255,200,'+pulse+')');
+  grad.addColorStop(0.5,eyeColor);
+  grad.addColorStop(1,'rgba(74,90,58,0)');
+  ctx.fillStyle=grad;
+  ctx.beginPath();
+  ctx.arc(ex+5,ey,eyeR*2,0,Math.PI*2);
+  ctx.fill();
+
+  // 瞳孔
+  ctx.fillStyle=hasBlocked?'#ff0000':'#8b6914';
+  ctx.beginPath();
+  ctx.arc(ex-5,ey,eyeR*0.5,0,Math.PI*2);
+  ctx.arc(ex+5,ey,eyeR*0.5,0,Math.PI*2);
+  ctx.fill();
+}
+
+function drawDragonParticles(){
+  // 沿龙身路径流动的监控光点
+  var N=dragonPathPts.length;
+  if(N<2) return;
+
+  // 维护粒子数组：自动补充新粒子
+  dragonParticles=dragonParticles.filter(function(p){return p.t<1;});
+  while(dragonParticles.length<3){
+    dragonParticles.push({t:0,speed:0.002+Math.random()*0.003});
+  }
+
+  var hasBlocked=tasks.some(function(t){return t.status==='blocked';});
+  dragonParticles.forEach(function(p){
+    p.t+=p.speed;
+    if(p.t>1) return;
+    var idx=Math.floor(p.t*(N-1));
+    var frac=p.t*(N-1)-idx;
+    if(idx>=N-1){idx=N-2;frac=1;}
+    var pt={
+      x:dragonPathPts[idx].x+(dragonPathPts[idx+1].x-dragonPathPts[idx].x)*frac,
+      y:dragonPathPts[idx].y+(dragonPathPts[idx+1].y-dragonPathPts[idx].y)*frac
+    };
+    // 检查附近是否有阻塞节点 → 粒子变红
+    var nearBlocked=false;
+    tasks.forEach(function(t){
+      if(t.status!=='blocked') return;
+      var tn=nodeById(t.id);
+      if(tn&&Math.hypot(pt.x-tn.x,pt.y-tn.y)<80) nearBlocked=true;
+    });
+
+    var alpha=0.4+0.6*Math.sin(p.t*Math.PI);
+    var baseColor=nearBlocked||hasBlocked?
+      'rgba(255,68,68,'+alpha+')':
+      'rgba(160,200,100,'+alpha+')';
+    ctx.fillStyle=baseColor;
+    ctx.beginPath();
+    ctx.arc(pt.x,pt.y,2.5,0,Math.PI*2);
+    ctx.fill();
+  });
+}
+
+function drawBlockedMarkers(){
+  // 阻塞节点：红色警告标记
+  tasks.forEach(function(t){
+    if(t.status!=='blocked') return;
+    var tn=nodeById(t.id);
+    if(!tn) return;
+
+    // 红色回旋箭头 ↩
+    ctx.fillStyle='#f85149';
+    ctx.font='16px sans-serif';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText('↩', tn.x, tn.y+NH/2+14);
+
+    // 红色脉冲环（呼吸动画）
+    var pulseAlpha=0.3+0.7*Math.abs(Math.sin(now/300));
+    ctx.strokeStyle='rgba(248,81,73,'+pulseAlpha+')';
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.arc(tn.x,tn.y,16+pulseAlpha*6,0,Math.PI*2);
+    ctx.stroke();
+  });
+}
+
+function drawDragon(){
+  var ctrlPts=calcDragonPath(); // 始终计算（无故障也画）
+  drawDragonBody(ctrlPts);
+  drawDragonEye();
+  drawDragonParticles();
+  drawBlockedMarkers();
+}
+
+// ====== 信息卡片（精简版：只展示状态+问题）======
+function drawInfoCard(n){
+  var realStatus=getEffectiveStatus(n.id);
+  var liveTask=taskById(n.id);
+  var hasError=realStatus==='blocked'&&!!(liveTask&&liveTask.error);
+  var cx=W-285,cy=20,cw=270,ch=hasError?130:60;
+  var maxTextW=cw-28;
+
+  ctx.fillStyle='rgba(22,27,34,0.95)';
+  ctx.beginPath();
+  ctx.roundRect(cx,cy,cw,ch,10);
+  ctx.fill();
+  ctx.strokeStyle='#30363d';
+  ctx.lineWidth=1;
+  ctx.stroke();
+
+  // 标题
+  ctx.fillStyle='#e6edf3';
+  ctx.font='bold 14px -apple-system,PingFang SC,sans-serif';
+  ctx.textAlign='left';
+  ctx.textBaseline='top';
+  var title=n.label[lang];
+  if(ctx.measureText(title).width>maxTextW){
+    while(ctx.measureText(title+'...').width>maxTextW&&title.length>0) title=title.slice(0,-1);
+    title=title+'...';
+  }
+  ctx.fillText(title,cx+14,cy+12);
+
+  // 状态
+  ctx.fillStyle=SC[realStatus];
+  ctx.font='bold 12px sans-serif';
+  ctx.fillText(i18n[lang].status[realStatus],cx+14,cy+34);
+
+  // ====== 代码探伤仪：质量信息 (v1.9) ======
+  var qScore=getQualityScore(n.id);
+  var qIssue=getWorstQualityIssue(n.id);
+  var taskQ=taskById(n.id);
+  var hasQuality=taskQ&&taskQ.quality;
+  if(hasQuality){
+    ch+=85; // 扩展卡片高度
+    // 质量评分
+    var scoreColor=qScore>=80?'#3fb950':qScore>=60?'#d29922':'#f85149';
+    ctx.fillStyle='#8b949e';ctx.font='10px sans-serif';ctx.textAlign='left';
+    ctx.fillText(lang==='zh'?'🔍 代码质量:':'🔍 Quality:',cx+14,cy+52);
+    ctx.fillStyle=scoreColor;ctx.font='bold 12px sans-serif';
+    ctx.fillText(qScore+'/100',cx+95,cy+52);
+    // 质量条
+    ctx.fillStyle='#21262d';ctx.beginPath();ctx.roundRect(cx+14,cy+64,200,6,3);ctx.fill();
+    ctx.fillStyle=scoreColor;ctx.beginPath();ctx.roundRect(cx+14,cy+64,200*qScore/100,6,3);ctx.fill();
+    // 问题标签
+    if(qIssue){
+      ctx.fillStyle=qIssue.color;ctx.font='bold 10px sans-serif';
+      var icons={'highCoupling':'🔴','deepNesting':'🟠','circularDep':'🟣','deadCode':'⚪','largeFunc':'🟡','noErrorHandling':'⚡'};
+      ctx.fillText((icons[qIssue.type]||'⚠️')+' '+qIssue.label+' — '+qIssue.detail,cx+14,cy+80);
+    }else{
+      ctx.fillStyle='#3fb950';ctx.font='10px sans-serif';
+      ctx.fillText('✅ '+ (lang==='zh'? '未检测到明显问题':'No issues detected'),cx+14,cy+80);
+    }
+    // 详细指标
+    var q=taskQ.quality;
+    ctx.fillStyle='#8b949e';ctx.font='9px monospace';ctx.textAlign='left';
+    var detailLine=(lang==='zh'?'耦合:':'Coup:')+q.coupling+'  '
+      +(lang==='zh'?'嵌套:':'Nest:')+q.nestingDepth+'  '
+      +(lang==='zh'?'行数:':'LOC:')+q.linesOfCode+'  '
+      +(lang==='zh'?'复杂度:':'CC:')+q.cyclomaticComplexity;
+    ctx.fillText(detailLine,cx+14,cy+94);
+  } // end hasQuality
+
+  // 错误详情（有故障时才展示）— Y坐标下移
+  if(hasError){
+    ctx.fillStyle='#f85149';
+    ctx.font='bold 11px sans-serif';
+    var errMsg=liveTask.error.message[lang];
+    if(ctx.measureText(errMsg).width>maxTextW){
+      while(ctx.measureText(errMsg+'...').width>maxTextW&&errMsg.length>0) errMsg=errMsg.slice(0,-1);
+      errMsg=errMsg+'...';
+    }
+    ctx.fillText(errMsg,cx+14,cy+54);
+
+    // 调用链
+    if(liveTask.error.callChain&&liveTask.error.callChain.length>0){
+      ctx.fillStyle='#8b949e';
+      ctx.font='9px monospace';
+      var ccStr=liveTask.error.callChain.join(' -> ');
+      if(ctx.measureText(ccStr).width>maxTextW){
+        while(ctx.measureText(ccStr+'...').width>maxTextW&&ccStr.length>0) ccStr=ccStr.slice(0,-1);
+        ccStr=ccStr+'...';
+      }
+      ctx.fillText(ccStr,cx+14,cy+72);
+    }
+
+    // 操作按钮（非调试模式 && 非外接信号模式才画）
+    if(currentMode!=='interactive' && !parentReady){
+      var btnW=90,btnH=22,btnY=cy+96;
+      ctx.fillStyle='#58a6ff';
+      ctx.beginPath();
+      ctx.roundRect(cx+14,btnY,btnW,btnH,4);
+      ctx.fill();
+      ctx.fillStyle='#fff';
+      ctx.font='bold 11px sans-serif';
+      ctx.textAlign='center';
+      ctx.textBaseline='middle';
+      ctx.fillText(i18n[lang].infoCard.aiFix, cx+14+btnW/2, btnY+btnH/2);
+      ctx.fillStyle='#6e7681';
+      ctx.beginPath();
+      ctx.roundRect(cx+14+btnW+6,btnY,btnW,btnH,4);
+      ctx.fill();
+      ctx.fillStyle='#e6edf3';
+      ctx.fillText(i18n[lang].infoCard.manualFix, cx+14+btnW+6+btnW/2, btnY+btnH/2);
+    }
+  }
+
+  // 花苞节点提示
+  if(realStatus==='waiting'&&!hasError){
+    ctx.fillStyle='#bc8cff';
+    ctx.font='10px sans-serif';
+    ctx.textAlign='left';
+    ctx.textBaseline='top';
+    ctx.fillText(i18n[lang].infoCard.budHint, cx+14, cy+120);
+  }
+
+  // 注入故障按钮（调试模式用弹出菜单替代；外接信号模式不显示）
+  if(realStatus==='done'&&currentMode!=='interactive'&&!parentReady){
+    var btnW=90,btnH=22,btnY=cy+158;
+    ctx.fillStyle='#f85149';
+    ctx.beginPath();
+    ctx.roundRect(cx+14,btnY,btnW,btnH,4);
+    ctx.fill();
+    ctx.fillStyle='#fff';
+    ctx.font='bold 11px sans-serif';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText(i18n[lang].infoCard.injectFault, cx+14+btnW/2, btnY+btnH/2);
+  }
+}
+
+// ====== 图例面板 ======
+function drawLegend(){
+  // 折叠按钮
+  var lbl=i18n[lang].legendBtn||'图例';
+  var lx=10, ly=H-34, lw=48, lh=20;
+  ctx.fillStyle='rgba(22,27,34,0.9)';
+  ctx.beginPath();
+  ctx.roundRect(lx,ly,lw,lh,4);
+  ctx.fill();
+  ctx.strokeStyle='#30363d';
+  ctx.lineWidth=1;
+  ctx.stroke();
+  ctx.fillStyle='#8b949e';
+  ctx.font='9px sans-serif';
+  ctx.textAlign='left';
+  ctx.textBaseline='middle';
+  ctx.fillText(legendExpanded?'\u2716 '+lbl:'\u2630 '+lbl,lx+5,ly+lh/2);
+
+  if(!legendExpanded) return;
+
+  // 展开面板 — 超紧凑
+  var mainItems=i18n[lang].legendItems;
+  var statusItems=i18n[lang].legendStatus||[];
+  // 状态区只占1行（内联色块）
+  var totalRows=mainItems.length+(statusItems.length>0?2:0); // +1 sep +1 status-line
+  var ROW_H=16;
+  var panelW=220, panelH=totalRows*ROW_H+12;
+  var px=lx, py=ly-panelH;
+
+  ctx.fillStyle='rgba(22,27,34,0.95)';
+  ctx.beginPath();
+  ctx.roundRect(px,py,panelW,panelH,6);
+  ctx.fill();
+  ctx.strokeStyle='#30363d';
+  ctx.lineWidth=1;
+  ctx.stroke();
+
+  // 标题
+  ctx.fillStyle='#e6edf3';
+  ctx.font='bold 9px -apple-system,PingFang SC,sans-serif';
+  ctx.textAlign='left';
+  ctx.textBaseline='top';
+  ctx.fillText(i18n[lang].legendTitle, px+6, py+3);
+
+  var row=0;
+  // 神树要件条目
+  mainItems.forEach(function(item,i){
+    var iy=py+13+row*ROW_H;
+    ctx.font='11px sans-serif';
+    ctx.textAlign='left';
+    ctx.textBaseline='middle';
+    ctx.fillText(item.icon,px+6,iy+8);
+    ctx.fillStyle='#d4a72c';
+    ctx.font='bold 9px -apple-system,PingFang SC,sans-serif';
+    ctx.fillText(item.label,px+24,iy+8);
+    ctx.fillStyle='#8b949e';
+    ctx.font='8px sans-serif';
+    ctx.fillText(item.desc,px+72,iy+8);
+    row++;
+  });
+
+  // 状态颜色 — 单行内联色块
+  if(statusItems.length>0){
+    row++;
+    var sepY=py+13+(row-1)*ROW_H+6;
+    ctx.strokeStyle='#30363d';
+    ctx.beginPath();ctx.moveTo(px+6,sepY);ctx.lineTo(px+panelW-6,sepY);ctx.stroke();
+    row++;
+    var sy=py+13+(row-1)*ROW_H+2;
+    // 内联绘制所有状态色块
+    var sx=px+6;
+    statusItems.forEach(function(item,idx){
+      // 色块 8x8
+      ctx.fillStyle=item.color;
+      ctx.beginPath();ctx.roundRect(sx,sy,8,8,2);ctx.fill();
+      // 缩写标签（取前4字符）
+      ctx.fillStyle='#c9d1d9';
+      ctx.font='8px sans-serif';
+      ctx.textAlign='left';ctx.textBaseline='middle';
+      var full=item.label;
+      var abbr=full.length>4?full.substring(0,4):full;
+      ctx.fillText(abbr,sx+11,sy+5);
+      sx+=ctx.measureText(abbr).width+18;
+    });
+  }
+}
+
+// ====== 交互：点击检测 ======
+function hitTest(mx,my){
+  for(var i=layoutNodes.length-1;i>=0;i--){
+    var n=layoutNodes[i];
+    if(mx>=n.x-NW/2&&mx<=n.x+NW/2&&my>=n.y-NH/2&&my<=n.y+NH/2) return n;
+  }
+  return null;
+}
+
+function hitPedestal(mx,my){
+  var baseY=H-PED_H*treeScale;  // 底座顶部y（考虑缩放）
+  var cx=W/2, mW=Math.min(400,W*0.5);
+  return mx>=cx-mW*0.6&&mx<=cx+mW*0.6&&my>=baseY-15&&my<=baseY+20;
+}
+
+function hitLegendToggle(mx,my){
+  var lx=10, ly=H-34, lw=48, lh=20;
+  return mx>=lx&&mx<=lx+lw&&my>=ly&&my<=ly+lh;
+}
+
+// 花苞点击检测（比节点范围稍大，包含花苞区域）
+function hitBud(mx,my){
+  for(var i=layoutNodes.length-1;i>=0;i--){
+    var n=layoutNodes[i];
+    var realStatus=getEffectiveStatus(n.id);
+    if(realStatus==='waiting'&&!budTransitions.find(function(t){return t.id===n.id;})){
+      var budY=n.y-NH/2-22;
+      var dx=mx-n.x, dy=my-budY;
+      if(dx*dx+dy*dy<=20*20) return n;
+    }
+  }
+  return null;
+}
+
+cv.addEventListener('mousemove',function(e){
+  var r=cv.getBoundingClientRect();
+  var mx=e.clientX-r.left, my=e.clientY-r.top;
+  // 反变换坐标到树的局部坐标系
+  var lx=(mx-treeOffsetX)/treeScale, ly=(my-treeOffsetY)/treeScale;
+  hoveredNode=hitTest(lx,ly);
+  var bud=hitBud(lx,ly);
+  cv.style.cursor=hoveredNode||hitPedestal(mx,my)||hitLegendToggle(mx,my)||bud?'pointer':'default';
+});
+
+cv.addEventListener('click',function(e){
+  // ====== 兜底：检测模式按钮点击（防止Canvas遮挡按钮onclick）======
+  var modesBar=document.getElementById('top-modes');
+  if(modesBar){
+    var mbRect=modesBar.getBoundingClientRect();
+    if(e.clientX>=mbRect.left&&e.clientX<=mbRect.right&&e.clientY>=mbRect.top&&e.clientY<=mbRect.bottom){
+      // 点击在按钮区域内，让原生 onclick 处理，不拦截
+      return;
+    }
+  }
+
+  // 调试模式下，点击更新 lastClickTime（防止超时返回演示）
+  if(currentMode==='interactive') lastClickTime=now;
+  var r=cv.getBoundingClientRect();
+  var mx=e.clientX-r.left, my=e.clientY-r.top;
+  // 反变换坐标到树的局部坐标系（用于 hitPedestal, hitBud）
+  var lx=(mx-treeOffsetX)/treeScale, ly=(my-treeOffsetY)/treeScale;
+
+  // 图例切换
+  if(hitLegendToggle(mx,my)){
+    if(!parentReady) currentMode=null; // 用户交互 → 暂停 demo（外部信号接入时不动模式）
+    legendExpanded=!legendExpanded;
+    return;
+  }
+
+  // 底座 → 切换树根
+  if(hitPedestal(mx,my)){
+    if(currentMode==='auto'){setMode('interactive');lastClickTime=performance.now();return;}
+    if(!parentReady) currentMode=null; // 用户交互 → 暂停 demo（外部信号接入时不动模式）
+    rootsExpanded=!rootsExpanded;
+    return;
+  }
+
+  // 花苞 → 激活转场
+  var bud=hitBud(lx,ly);
+  if(bud){
+    if(currentMode==='auto'){setMode('interactive');lastClickTime=performance.now();return;}
+    if(!parentReady) currentMode=null; // 用户交互 → 暂停 demo（外部信号接入时不动模式）
+    budTransitions.push({id:bud.id,startTime:now,duration:800});
+    selectedNode=null; // 点花苞不显示InfoCard
+    return;
+  }
+
+  // 节点点击 → 调试模式弹出菜单 / 其他模式选中
+  var hit=hitTest(lx,ly);
+  if(hit){
+    // V4 postMessage：通知父窗口节点被点击
+    sendNodeClick(hit.id);
+    if(currentMode==='auto'){
+      setMode('interactive');lastClickTime=now;selectedNode=null;
+      showNodeMenu(hit, e.clientX, e.clientY);
+      e.stopPropagation(); // 阻止冒泡到document（否则菜单立即被关闭）
+      return;
+    }
+    if(currentMode==='interactive'){
+      lastClickTime=now;hideNodeMenu();selectedNode=null;
+      showNodeMenu(hit, e.clientX, e.clientY);
+      e.stopPropagation(); // 阻止冒泡到document（否则菜单立即被关闭）
+      return;
+    }
+    // 接入模式：树为观察器，不响应点击
+    if(currentMode==='real'){return;}
+    // 接入模式（外部信号已接入）：只发代码位置通知，不显示InfoCard
+    if(parentReady){return;}
+    currentMode=null; selectedNode=hit; return;
+  }
+
+  // InfoCard 按钮点击检测（外接信号模式不响应面板按钮，所有操作走控制面板）
+  if(selectedNode && !parentReady){
+    var sn=selectedNode;
+    var sRealStatus=getEffectiveStatus(sn.id);
+    var sLiveTask=taskById(sn.id);
+    var sHasError=sRealStatus==='blocked'&&!!(sLiveTask&&sLiveTask.error);
+
+    if(currentMode!=='interactive'){
+      var infoCx=W-285, infoCy=20;
+
+      if(sHasError){
+        var btnW=90, btnH=22, btnY=infoCy+96;
+        if(mx>=infoCx+14&&mx<=infoCx+14+btnW&&my>=btnY&&my<=btnY+btnH){
+          menuNode=selectedNode; menuAiFix(); return;
+        }
+        if(mx>=infoCx+14+btnW+6&&mx<=infoCx+14+btnW+6+btnW&&my>=btnY&&my<=btnY+btnH){
+          menuNode=selectedNode; menuManualFix(); return;
+        }
+      }
+
+      if(sRealStatus==='done'){
+        var btnW2=90, btnH2=22, btnY2=infoCy+158;
+        if(mx>=infoCx+14&&mx<=infoCx+14+btnW2&&my>=btnY2&&my<=btnY2+btnH2){
+          menuNode=selectedNode; menuInjectFault(); return;
+        }
+      }
+    }
+  }
+
+  // 点击空白区域
+  if(currentMode==='auto'){setMode('interactive');lastClickTime=now;return;}
+  if(currentMode==='interactive'){lastClickTime=now;hideNodeMenu();return;}
+  if(!parentReady) currentMode=null; selectedNode=null;
+});
+
+// ====== postMessage：接收父窗口消息 (V4) ======
+window.addEventListener('message',function(event){
+  // 验证 secret
+  if(!event.data || event.data.secret !== SECRET){
+    console.warn('[Fusang] ⚠️ Invalid secret from parent, ignoring');
+    return;
+  }
+  // 收到合法消息 → 重置断开检测定时器 + 空闲计时器
+  lastExtSignalTime=performance.now();
+  if(currentMode==='real') accessModeLastActive=performance.now();
+  if(parentReady){
+    var dot=document.getElementById('live-connect-dot');
+    if(dot) dot.className='live-dot connected';
+    var txt=document.getElementById('live-connect-text');
+    if(txt) txt.textContent=i18n[lang].liveConnected||'已连接';
+  }
+
+  if(event.data.type==='FUSANG_READY'){
+    parentReady=true;
+    lastExtSignalTime=performance.now();
+    console.log('[Fusang] ✅ 外部信号已接管（最高优先权）');
+    // ★ 强制接管：不管当前什么状态，外部信号一来就重置一切
+    tasks.forEach(function(t){t.status='todo';t.error=null;});
+    demoState=-1;demoDimOverlay=false;demoLitSet={};
+    // 禁用演示/调试按钮
+    var autoBtn=document.getElementById('btn-auto');
+    var intBtn=document.getElementById('btn-interactive');
+    [autoBtn,intBtn].forEach(function(b){
+      if(b){b.disabled=true;b.style.opacity='0.3';b.style.cursor='not-allowed';b.style.color='#484f58';b.style.background='transparent';b.style.boxShadow='none';}
+    });
+    // 接入按钮常亮
+    var realBtn=document.getElementById('btn-real');
+    if(realBtn){realBtn.disabled=false;realBtn.style.cursor='default';realBtn.style.opacity='1';realBtn.style.color='#0d1117';realBtn.style.background='linear-gradient(135deg,#3fb950,#2ea043)';realBtn.style.fontWeight='bold';realBtn.style.boxShadow='0 0 12px rgba(63,185,80,0.5)';}
+    // 确保面板打开
+    document.getElementById('live-panel').classList.add('open');
+    document.getElementById('live-handle').style.display='block';
+    if(!window._liveInitialized){ initLivePanel(); }
+    // ★ 触发全屏闪烁 + 光晕效果
+    globalFlashStart=performance.now();
+    tasks.forEach(function(t){t._haloStart=performance.now();});
+    // 重置模拟开关为 OFF（外部信号接管后模拟功能让出）
+    _liveSwitchOn=false;
+    var swBtn=document.getElementById('live-switch-btn');
+    var swTxt=document.getElementById('live-switch-text');
+    if(swBtn) swBtn.className='live-switch off';
+    if(swTxt) swTxt.textContent='OFF';
+    enableLiveControls(false);
+    // 更新连接状态灯
+    var dot=document.getElementById('live-connect-dot');
+    if(dot) dot.className='live-dot connected';
+    var txt=document.getElementById('live-connect-text');
+    if(txt) txt.textContent=i18n[lang].liveConnected||'已连接';
+    // 触发全局视觉反馈
+    globalFlashStart=performance.now();
+    globalGlowStart=performance.now();
+    currentMode='real';
+    resize();
+    requestAnimationFrame(draw);
+    console.log('[Fusang] 🔌 外部信号已完全接管，所有节点重置为未搭建');
+    return;
+  }
+
+  // V4：收到父窗口对节点点击的 ACK（清除超时定时器，防止内存泄漏）
+  if(event.data.type==='FUSANG_NODE_CLICK_ACK'){
+    var ackMsgId=event.data.messageId;
+    if(ackMsgId && pendingAcks[ackMsgId]){
+      clearTimeout(pendingAcks[ackMsgId]);
+      delete pendingAcks[ackMsgId];
+      console.log('[Fusang] ✅ 收到 ACK：'+ackMsgId);
+    }
+    return;
+  }
+
+  // V4：外部系统通知"节点已搭建完成"
+  if(event.data.type==='FUSANG_BUILD_NODE'){
+    var nodeId=event.data.nodeId;
+    if(!nodeId){console.warn('[Fusang] ⚠️ BUILD_NODE: nodeId 为空');return;}
+    var task=taskById(nodeId);
+    if(!task){console.warn('[Fusang] ⚠️ BUILD_NODE: 节点不存在 '+nodeId);return;}
+    // 故障节点不允许搭建，需先修复
+    if(task.status==='blocked'){
+      console.warn('[Fusang] ⚠️ BUILD_NODE: 节点故障中，请先修复 '+nodeId);
+      return;
+    }
+    // 已搭建则提示，不重复操作
+    if(task.status==='done'){
+      console.log('[Fusang] ⚠️ BUILD_NODE: 节点已搭建，无需重复 '+nodeId);
+      return;
+    }
+    var oldSt=task.status;
+    task.status='done';task.error=null;
+    sendStatusChange(nodeId,oldSt,'done');
+    liveLog(i18n[lang].liveLogBuild+nodeId+' (外部信号)');
+    console.log('[Fusang] 🟢 外部信号 → 搭建: '+nodeId);
+    return;
+  }
+
+  if(event.data.type==='FUSANG_DISCONNECT'){
+    handleDisconnect();
+    return;
+  }
+
+  if(event.data.type==='FUSANG_HIGHLIGHT_NODE'){
+    var node=nodeById(event.data.nodeId);
+    if(node){
+      // 高亮节点：闪烁金色 3 秒
+      highlightNodeId=event.data.nodeId;
+      highlightNodeStart=performance.now();
+      console.log('[Fusang] ✨ 高亮节点：'+event.data.nodeId);
+    } else {
+      console.warn('[Fusang] ⚠️ 节点不存在：'+event.data.nodeId);
+    }
+    return;
+  }
+
+  // V4 新增：注入故障信号
+  if(event.data.type==='FUSANG_INJECT_FAULT'){
+    var nodeId=event.data.nodeId;
+    if(!nodeId){console.warn('[Fusang] ⚠️ INJECT_FAULT: nodeId 为空');return;}
+    var task=taskById(nodeId);
+    if(!task){console.warn('[Fusang] ⚠️ INJECT_FAULT: 节点不存在 '+nodeId);return;}
+    // 状态校验：只能对已搭建（done）节点注入故障
+    if(task.status==='todo'||task.status==='waiting'){
+      console.warn('[Fusang] ⛔ 节点 '+nodeId+' 未搭建，无法注入故障');
+      return;
+    }
+    // 注入故障：只设目标节点 blocked，不 recalcAll
+    // 下游等待/阻塞视觉效果由 getEffectiveStatus() 渲染时自动计算
+    var oldStatus=task.status;
+    task.status='blocked';
+    task.error={message:{zh:event.data.errorMsg||'外部信号触发故障',en:event.data.errorMsgEn||'External fault triggered'},file:task.file||'',line:1,callChain:[]};
+    sendStatusChange(nodeId, oldStatus, 'blocked');
+    requestAnimationFrame(draw);
+    console.log('[Fusang] 🔴 注入故障：'+nodeId);
+    return;
+  }
+
+  // V4 新增：AI 修复信号
+  if(event.data.type==='FUSANG_AI_FIX'){
+    var nodeId=event.data.nodeId;
+    if(!nodeId){console.warn('[Fusang] ⚠️ AI_FIX: nodeId 为空');return;}
+    var task=taskById(nodeId);
+    if(!task){console.warn('[Fusang] ⚠️ AI_FIX: 节点不存在 '+nodeId);return;}
+    // 状态校验：只修复故障节点
+    if(task.status!=='blocked'){
+      console.warn('[Fusang] ⛔ 节点 '+nodeId+' 无故障，无需修复');
+      return;
+    }
+    // AI 修复：只修复目标节点，不自动传导下游（接入模式=逐级操作）
+    var oldStatus=task.status;
+    task.status='done';
+    task.error=null;
+    sendStatusChange(nodeId, oldStatus, 'done');
+    requestAnimationFrame(draw);
+    console.log('[Fusang] 🤖 AI 修复：'+nodeId);
+    return;
+  }
+
+  // V4 新增：人工修复信号
+  if(event.data.type==='FUSANG_MANUAL_FIX'){
+    var nodeId=event.data.nodeId;
+    if(!nodeId){console.warn('[Fusang] ⚠️ MANUAL_FIX: nodeId 为空');return;}
+    var task=taskById(nodeId);
+    if(!task){console.warn('[Fusang] ⚠️ MANUAL_FIX: 节点不存在 '+nodeId);return;}
+    // 状态校验：只修复故障节点
+    if(task.status!=='blocked'){
+      console.warn('[Fusang] ⛔ 节点 '+nodeId+' 无故障，无需修复');
+      return;
+    }
+    // 人工修复：只修复目标节点，不自动传导下游
+    var oldStatus=task.status;
+    task.status='done';
+    task.error=null;
+    sendStatusChange(nodeId, oldStatus, 'done');
+    requestAnimationFrame(draw);
+    console.log('[Fusang] ✋ 人工修复：'+nodeId);
+    return;
+  }
+
+  // V4 新增：通用设置状态信号（接通/故障/进行中/待办）
+  if(event.data.type==='FUSANG_SET_STATUS'){
+    var nodeId=event.data.nodeId;
+    var newStatus=event.data.status;
+    if(!nodeId||!newStatus){console.warn('[Fusang] ⚠️ SET_STATUS: 参数不完整');return;}
+    var task=taskById(nodeId);
+    if(!task){console.warn('[Fusang] ⚠️ SET_STATUS: 节点不存在 '+nodeId);return;}
+    var oldStatus=task.status;
+    task.status=newStatus;
+    if(newStatus!=='blocked') task.error=null; else task.error=task.error||{message:{zh:'外部信号',en:'External signal'},file:task.file||'',line:1,callChain:[]};
+    sendStatusChange(nodeId, oldStatus, newStatus);
+    // 接入模式：不调用 recalcAll()，只操作目标节点
+    // 依赖视觉效果由 getEffectiveStatus() 在渲染时自动计算
+    requestAnimationFrame(draw);
+    console.log('[Fusang] 📶 设置状态：'+nodeId+'→'+newStatus);
+    return;
+  }
+
+  console.log('[Fusang] 📨 收到未知消息：',event.data.type);
+});
+
+// ====== 断开处理（心跳超时或主动断开）======
+function handleDisconnect(){
+  parentReady=false;
+  lastExtSignalTime=0;
+  console.log('[Fusang] 🔌 外部信号已断开，3分钟内无信号将进入演示模式');
+  // 更新连接状态指示灯
+  var dot=document.getElementById('live-connect-dot');
+  if(dot) dot.className='live-dot disconnected';
+  var txt=document.getElementById('live-connect-text');
+  if(txt) txt.textContent=i18n[lang].liveDisconnected||'未连接';
+  // 恢复演示/调试按钮
+  var autoBtn=document.getElementById('btn-auto');
+  var intBtn=document.getElementById('btn-interactive');
+  [autoBtn,intBtn].forEach(function(b){
+    if(b){b.disabled=false;b.style.opacity='1';b.style.cursor='pointer';b.style.color='#8b949e';b.style.background='transparent';b.style.boxShadow='none';b.onclick=function(){setMode(this.id.replace('btn-',''));};}
+  });
+  // 接入按钮恢复普通状态
+  var realBtn=document.getElementById('btn-real');
+  if(realBtn){realBtn.style.background='transparent';realBtn.style.color='#8b949e';realBtn.style.fontWeight='normal';realBtn.style.boxShadow='none';}
+  // ★ 断开后进入演示模式（用户要求）
+  setMode('auto');
+}
+
+// ====== 外部信号接入：锁定模式 ======
+function updateModeForConnection(){
+  if(!parentReady) return;
+  // 切换到接入模式（不 resetToAllGreen，而是置所有节点为未开启状态）
+  currentMode='real';
+  modeStep=0;
+  modeStartTime=performance.now();
+  selectedNode=null;
+  rootsExpanded=false;
+  demoState=-1;
+  demoDimOverlay=false;
+  demoLitSet={};
+  hideNodeMenu();
+  cv.style.border='none';
+  // 所有节点进入「未开启」待激活状态
+  tasks.forEach(function(t){t.status='todo';t.error=null;});
+  recalcAll();
+  // 禁用演示按钮
+  var autoBtn=document.getElementById('btn-auto');
+  var intBtn=document.getElementById('btn-interactive');
+  [autoBtn,intBtn].forEach(function(b){
+    if(b){
+      b.disabled=true;
+      b.style.opacity='0.3';
+      b.style.cursor='not-allowed';
+      b.style.color='#484f58';
+      b.style.background='transparent';
+      b.style.boxShadow='none';
+      b.onclick=function(){return false;};
+    }
+  });
+  // 接入按钮常亮（绿色=已连接）
+  var realBtn=document.getElementById('btn-real');
+  if(realBtn){
+    realBtn.disabled=false;
+    realBtn.style.cursor='default';
+    realBtn.style.opacity='1';
+    realBtn.style.color='#0d1117';
+    realBtn.style.background='linear-gradient(135deg,#3fb950,#2ea043)';
+    realBtn.style.fontWeight='bold';
+    realBtn.style.boxShadow='0 0 12px rgba(63,185,80,0.5)';
+  }
+  console.log('[Fusang] 🔌 外部信号接入 → 所有节点未开启，等待信号激活');
+}
+
+// ====== 模式切换 ======
+function setMode(mode){
+  // ★ 接入按钮开关逻辑：已在接入模式时点「接入」→ 退出
+  if(mode==='real' && currentMode==='real'){
+    setMode('interactive');
+    return;
+  }
+  // 外部信号已接入时，禁止切换到演示/调试模式
+  if(parentReady && mode!=='real' && mode!=='probe'){
+    console.log('[Fusang] ⛔ 外部信号接入中，禁止切换到 '+mode+' 模式');
+    return;
+  }
+  // ★ 探伤模式：保留现有树结构，启动演示或等待扫描
+  if(mode==='probe'){
+    demoState=-1; // 停止 auto 模式演示
+    demoDimOverlay=false;
+    demoLitSet={};
+    hideNodeMenu();
+    cv.style.border='none';
+    // 启动探伤演示状态机
+    probeDemoState=0;
+    probeStartTime=performance.now();
+    probeSkipRequested=false;
+    resetToAllGreen(); // 先重置全绿，让演示从头开始
+    console.log('[Fusang] 🔬 探伤模式 → 启动演示');
+  } else if(mode==='real'){
+    demoState=-1;
+    demoDimOverlay=false;
+    demoLitSet={};
+    hideNodeMenu();
+    cv.style.border='none';
+    // 所有节点进入「未搭建」待激活状态（接入模式核心逻辑）
+    tasks.forEach(function(t){t.status='todo';t.error=null;});
+    recalcAll();
+    // ★ 接入模式空闲计时器：任何操作都会重置此时间
+    accessModeLastActive=performance.now();
+    // ★ 最高优先权：禁用演示/调试按钮
+    var autoBtn=document.getElementById('btn-auto');
+    var intBtn=document.getElementById('btn-interactive');
+    [autoBtn,intBtn].forEach(function(b){
+      if(b){
+        b.disabled=true;
+        b.style.opacity='0.3';
+        b.style.cursor='not-allowed';
+        b.style.color='#484f58';
+        b.style.background='transparent';
+        b.style.boxShadow='none';
+      }
+    });
+    // ★ 接入按钮常亮高亮
+    var realBtn=document.getElementById('btn-real');
+    if(realBtn){
+      realBtn.disabled=false;
+      realBtn.style.cursor='default';
+      realBtn.style.opacity='1';
+      realBtn.style.color='#0d1117';
+      realBtn.style.background='linear-gradient(135deg,#3fb950,#2ea043)';
+      realBtn.style.fontWeight='bold';
+      realBtn.style.boxShadow='0 0 12px rgba(63,185,80,0.5)';
+    }
+    // 展开右侧面板
+    document.getElementById('live-panel').classList.add('open');
+    document.getElementById('live-handle').style.display='block';
+    if(!window._liveInitialized){ initLivePanel(); }
+    // 重置开关状态（每次进入接入模式都重置为 OFF）
+    if(_liveSwitchOn){ _liveSwitchOn=false; }
+    var swBtn=document.getElementById('live-switch-btn');
+    var swTxt=document.getElementById('live-switch-text');
+    if(swBtn) swBtn.className='live-switch off';
+    if(swTxt) swTxt.textContent='OFF';
+    setLiveConnected(false);
+    // 外部信号已提前到达 → 立即显示已连接 + 触发视觉反馈
+    if(parentReady){
+      var dot=document.getElementById('live-connect-dot');
+      if(dot) dot.className='live-dot connected';
+      var txt=document.getElementById('live-connect-text');
+      if(txt) txt.textContent=i18n[lang].liveConnected||'已连接';
+      globalFlashStart=performance.now();
+      globalGlowStart=performance.now();
+    }
+    enableLiveControls(false);
+    resize(); // 重新计算 canvas 宽度，避免树被遮挡
+    console.log('[Fusang] 🔌 接入模式 → 所有节点未搭建，等待信号激活');
+  } else if(currentMode==='real') {
+    // ★ 从接入模式退出：收起右侧面板 + 恢复按钮
+    document.getElementById('live-panel').classList.remove('open');
+    document.getElementById('live-handle').style.display='none';
+    // 恢复演示/调试按钮
+    var autoBtn=document.getElementById('btn-auto');
+    var intBtn=document.getElementById('btn-interactive');
+    [autoBtn,intBtn].forEach(function(b){
+      if(b){
+        b.disabled=false;
+        b.style.opacity='1';
+        b.style.cursor='pointer';
+        b.style.color='#8b949e';
+        b.style.background='transparent';
+        b.style.boxShadow='none';
+        b.onclick=function(){setMode(this.id.replace('btn-',''));};
+      }
+    });
+    // 接入按钮恢复默认样式
+    var realBtn=document.getElementById('btn-real');
+    if(realBtn){
+      realBtn.style.color='#8b949e';
+      realBtn.style.background='transparent';
+      realBtn.style.fontWeight='normal';
+      realBtn.style.boxShadow='none';
+      realBtn.style.cursor='pointer';
+    }
+    resize(); // 恢复 canvas 全宽
+  }
+  // 以下为所有模式通用的收尾逻辑
+  currentMode=mode;
+  modeStep=0;
+  modeStartTime=performance.now();
+  if(mode==='auto') demoState=0;
+  selectedNode=null;
+  rootsExpanded=false;
+  // 模式按钮高亮
+  ['btn-auto','btn-interactive','btn-real','btn-probe'].forEach(function(id){
+    var b=document.getElementById(id);
+    if(b) {
+      if(id==='btn-'+mode){
+        b.style.color='#0d1117';
+        b.style.background='linear-gradient(135deg,#58a6ff,#3b82f6)';
+        b.style.fontWeight='bold';
+        b.style.boxShadow='0 0 8px rgba(88,166,255,0.5)';
+      } else {
+        b.style.color='#8b949e';
+        b.style.background='transparent';
+        b.style.fontWeight='normal';
+        b.style.boxShadow='none';
+      }
+    }
+  });
+  // 注入故障按钮显隐
+  var injectBar=document.getElementById('inject-bar');
+  if(mode==='auto'){
+    // 切入演示：清掉调试残留，从S0重新开始
+    demoState=0;demoStartTime=performance.now();
+    demoDimOverlay=false;demoLitSet={};
+    resetToAllGreen();
+    hideNodeMenu();
+    cv.style.border='none';
+  } else if(mode==='interactive'){
+    // 调试优先：暂停演示状态机，全绿展示
+    demoDimOverlay=false;demoLitSet={};demoState=-1;
+    resetToAllGreen();
+    hideNodeMenu();
+    cv.style.border='2px solid #58a6ff'; // 蓝色边框 = 调试模式
+    lastClickTime=performance.now(); // 重置超时计时器
+  } else {
+    cv.style.border='none';
+  }
+}
+
+// ====== 节点操作弹出菜单 ======
+var menuNode=null; // 当前菜单对应的节点
+
+function showNodeMenu(node, screenX, screenY){
+  var menu=document.getElementById('node-menu');
+  if(!menu) return;
+  menuNode=node;
+  var task=taskById(node.id);
+  var status=getEffectiveStatus(node.id);
+
+  // 根据节点状态生成菜单项
+  var html='';
+  if(status!=='blocked'){
+    // 正常节点（绿/紫/灰）→ 显示注入故障
+    html+='<div onclick="menuInjectFault()" style="padding:8px 16px;cursor:pointer;font-size:12px;color:#f85149;display:flex;align-items:center;gap:6px;" onmouseover="this.style.background=\'rgba(248,81,73,0.1)\'" onmouseout="this.style.background=\'none\'">⚡ '+i18n[lang].infoCard.injectFault+'</div>';
+  }
+  if(status==='blocked'&&task&&task.error){
+    // 故障节点 → 显示修复选项
+    html+='<div onclick="menuAiFix()" style="padding:8px 16px;cursor:pointer;font-size:12px;color:#58a6ff;display:flex;align-items:center;gap:6px;" onmouseover="this.style.background=\'rgba(88,166,255,0.1)\'" onmouseout="this.style.background=\'none\'">🤖 AI '+i18n[lang].infoCard.aiFix+'</div>';
+    html+='<div onclick="menuManualFix()" style="padding:8px 16px;cursor:pointer;font-size:12px;color:#3fb950;display:flex;align-items:center;gap:6px;" onmouseover="this.style.background=\'rgba(63,179,80,0.1)\'" onmouseout="this.style.background=\'none\'">🔧 '+i18n[lang].infoCard.manualFix+'</div>';
+  }
+
+  menu.innerHTML=html;
+  menu.style.display='block';
+
+  // 定位：确保不超出屏幕
+  var mw=150, mh=html.split('</div>').length*34+12;
+  var mx=screenX+8, my=screenY+8;
+  if(mx+mw>window.innerWidth) mx=screenX-mw-8;
+  if(my+mh>window.innerHeight) my=screenY-mh-8;
+  menu.style.left=mx+'px';
+  menu.style.top=my+'px';
+}
+
+function hideNodeMenu(){
+  var menu=document.getElementById('node-menu');
+  if(menu){menu.style.display='none';}
+  menuNode=null;
+}
+
+// 菜单操作函数
+function menuInjectFault(){
+  if(!menuNode){console.warn('[Fusang] menuNode is null!'); return;}
+  injectFault(menuNode.id);
+  // 暂停演示状态机，切换到调试模式
+  demoState=-1;
+  demoDimOverlay=false;
+  demoLitSet={};
+  currentMode='interactive';
+  modeStep=0;
+  modeStartTime=performance.now();
+  selectedNode=null;
+  rootsExpanded=false;
+  // 更新UI：模式按钮高亮 + 边框
+  ['btn-auto','btn-interactive','btn-real'].forEach(function(id){
+    var b=document.getElementById(id);
+    if(b){
+      if(id==='btn-interactive'){
+        b.style.color='#0d1117';
+        b.style.background='linear-gradient(135deg,#58a6ff,#3b82f6)';
+        b.style.fontWeight='bold';
+        b.style.boxShadow='0 0 8px rgba(88,166,255,0.5)';
+      } else {
+        b.style.color='#8b949e';
+        b.style.background='transparent';
+        b.style.fontWeight='normal';
+        b.style.boxShadow='none';
+      }
+    }
+  });
+  document.body.classList.add('mode-interactive');
+  document.body.classList.remove('mode-auto');
+  var ib=document.getElementById('injectionBar');
+  if(ib) ib.classList.remove('visible');
+  hideNodeMenu();
+}
+
+function menuAiFix(){
+  if(!menuNode)return;
+  startFixAnimation(menuNode.id,'ai');
+  hideNodeMenu();
+}
+
+function menuManualFix(){
+  if(!menuNode)return;
+  startFixAnimation(menuNode.id,'manual');
+  hideNodeMenu();
+}
+
+// 点击页面其他地方关闭菜单
+document.addEventListener('click',function(e){
+  var menu=document.getElementById('node-menu');
+  if(menu&&menu.style.display!=='none'&&!menu.contains(e.target)){
+    hideNodeMenu();
+    lastClickTime=performance.now(); // 关闭菜单时重置超时计时器
+  }
+});
+
+function resetToAllGreen(){
+  tasks.forEach(function(t){t.status='done';t.error=null;});
+  recalcAll();
+}
+
+function injectRandomFault(){
+  var candidates=tasks.filter(function(t){return t.id!=='goal';});
+  var idx=Math.floor(Math.random()*candidates.length);
+  var t=candidates[idx];
+  t.status='blocked';
+  t.error={message:{zh:'随机注入故障',en:'Random fault injected'},file:t.file||'',line:1,callChain:[]};
+  if(currentMode==='interactive'){
+    document.getElementById('btn-inject').style.display='none';
+  }
+}
+
+// ====== 接入模式控制面板 ======
+var _liveLogEl=null;
+var _liveNodeIds=['entry','config','db','cache','api','auth','frontend','tests','ci'];
+var _liveExternalActive=false;
+var _liveSwitchOn=false;   // 模拟开关状态
+
+function initLivePanel(){
+  window._liveInitialized=true;
+  _liveLogEl=document.getElementById('live-log');
+  populateLiveNodes();
+  // 初始化三段式状态栏：信号已检测到(自模拟)，开关关闭，控制面板禁用
+  setLiveSignalDetected(true);
+  setLiveConnected(false);
+  enableLiveControls(false);
+  liveLog(i18n[lang].liveLogLoaded);
+  liveLog(i18n[lang].liveLogReady);
+  initLiveDragHandle();
+}
+
+function populateLiveNodes(){
+  var sel=document.getElementById('live-node-select');
+  if(!sel) return;
+  sel.innerHTML='';
+  _liveNodeIds.forEach(function(id){
+    var opt=document.createElement('option');
+    opt.value=id;
+    var task=taskById(id);
+    opt.textContent=id+(task?' '+(task.label[lang]||''):'');
+    sel.appendChild(opt);
+  });
+}
+
+function getLiveNode(){
+  var sel=document.getElementById('live-node-select');
+  return sel?sel.value:'entry';
+}
+
+function liveLog(msg){
+  if(!_liveLogEl) _liveLogEl=document.getElementById('live-log');
+  if(!_liveLogEl) return;
+  var time=new Date().toLocaleTimeString(lang==='zh'?'zh-CN':'en-US');
+  _liveLogEl.innerHTML+='['+time+'] '+msg+'\n';
+  _liveLogEl.scrollTop=_liveLogEl.scrollHeight;
+}
+
+function checkLiveAllowed(){
+  if(_liveExternalActive){
+    liveLog('🔌 '+i18n[lang].liveLogExternal);
+    return false;
+  }
+  return true;
+}
+
+// ====== 三段式状态栏 ======
+function setLiveSignalDetected(on){
+  var dot=document.getElementById('live-signal-dot');
+  var sw=document.getElementById('live-switch-btn');
+  if(on){
+    if(dot) dot.className='live-dot signal-on';
+    if(sw) sw.disabled=false;
+  }else{
+    if(dot) dot.className='live-dot signal-off';
+    if(sw){sw.disabled=true;if(_liveSwitchOn)toggleLiveSwitch();}
+  }
+}
+
+function setLiveConnected(on){
+  var dot=document.getElementById('live-connect-dot');
+  if(dot) dot.className=on?'live-dot connected':'live-dot disconnected';
+}
+
+function toggleLiveSwitch(){
+  accessModeLastActive=performance.now(); // 重置空闲计时器
+  if(!_liveSwitchOn){
+    // 开启模拟
+    _liveSwitchOn=true;
+    var btn=document.getElementById('live-switch-btn');
+    var txt=document.getElementById('live-switch-text');
+    if(btn) btn.className='live-switch on';
+    if(txt) txt.textContent='ON';
+    setLiveConnected(true);
+    enableLiveControls(true);
+    liveLog(i18n[lang].liveLogSwitchOn);
+  }else{
+    // 关闭模拟
+    _liveSwitchOn=false;
+    var btn=document.getElementById('live-switch-btn');
+    var txt=document.getElementById('live-switch-text');
+    if(btn) btn.className='live-switch off';
+    if(txt) txt.textContent='OFF';
+    setLiveConnected(false);
+    enableLiveControls(false);
+    liveLog(i18n[lang].liveLogSwitchOff);
+  }
+}
+
+function enableLiveControls(on){
+  var ids=['live-btn-build','live-btn-fault','live-btn-ai','live-btn-manual'];
+  ids.forEach(function(id){
+    var b=document.getElementById(id);
+    if(!b)return;
+    b.disabled=!on;
+    b.style.opacity=on?'1':'0.35';
+    b.style.cursor=on?'pointer':'not-allowed';
+  });
+}
+
+function liveBuild(){
+  accessModeLastActive=performance.now(); // 重置空闲计时器
+  if(!checkLiveAllowed()) return;
+  var nid=getLiveNode();
+  var task=taskById(nid);
+  if(!task){liveLog(i18n[lang].liveLogNodeNotFound+nid);return;}
+  // 故障节点不允许搭建，需先修复
+  if(task.status==='blocked'){liveLog(i18n[lang].liveLogNodeFaulted+nid);return;}
+  // 已搭建节点无需重复搭建
+  if(task.status==='done'){liveLog(i18n[lang].liveLogNodeAlreadyDone+nid);return;}
+  // 接入模式：只搭建当前节点，不自动传导下游（逐级搭建）
+  var oldSt=task.status;
+  task.status='done';task.error=null;
+  sendStatusChange(nid,oldSt,'done');
+  liveLog(i18n[lang].liveLogBuild+nid);
+  requestAnimationFrame(draw);
+}
+
+function liveFault(){
+  accessModeLastActive=performance.now(); // 重置空闲计时器
+  if(!checkLiveAllowed()) return;
+  var nid=getLiveNode();
+  var task=taskById(nid);
+  if(!task){liveLog(i18n[lang].liveLogNodeNotFound+nid);return;}
+  if(task.status==='todo'||task.status==='waiting'){liveLog(i18n[lang].liveLogNodeNotBuilt+nid);return;}
+  var oldSt=task.status;
+  task.status='blocked';
+  task.error={message:{zh:'注入故障',en:'Injected fault'},file:'',line:1,callChain:[]};
+  sendStatusChange(nid,oldSt,'blocked');
+  // 接入模式：不调用 recalcAll()，只操作目标节点
+  // 下游节点的等待/阻塞视觉效果由 getEffectiveStatus() 渲染时自动计算
+  liveLog(i18n[lang].liveLogFault+nid);
+  requestAnimationFrame(draw);
+}
+
+function liveAiFix(){
+  accessModeLastActive=performance.now(); // 重置空闲计时器
+  if(!checkLiveAllowed()) return;
+  var nid=getLiveNode();
+  var task=taskById(nid);
+  if(!task){liveLog(i18n[lang].liveLogNodeNotFound+nid);return;}
+  if(task.status!=='blocked'){liveLog(i18n[lang].liveLogNodeNotFaulty+nid);return;}
+  startFixAnimation(nid,'ai');
+  liveLog(i18n[lang].liveLogAiFix+nid);
+}
+
+function liveManualFix(){
+  accessModeLastActive=performance.now(); // 重置空闲计时器
+  if(!checkLiveAllowed()) return;
+  var nid=getLiveNode();
+  var task=taskById(nid);
+  if(!task){liveLog(i18n[lang].liveLogNodeNotFound+nid);return;}
+  if(task.status!=='blocked'){liveLog(i18n[lang].liveLogNodeNotFaulty+nid);return;}
+  startFixAnimation(nid,'manual');
+  liveLog(i18n[lang].liveLogManualFix+nid);
+}
+
+function liveCopyLog(){
+  if(!_liveLogEl||!_liveLogEl.textContent){liveLog(i18n[lang].liveLogEmpty);return;}
+  navigator.clipboard.writeText(_liveLogEl.textContent).then(function(){
+    liveLog(i18n[lang].liveLogCopied+_liveLogEl.textContent.length+' chars)');
+  }).catch(function(){
+    var ta=document.createElement('textarea');
+    ta.value=_liveLogEl.textContent;
+    ta.style.position='fixed';ta.style.left='-9999px';
+    document.body.appendChild(ta);ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    liveLog(i18n[lang].liveLogCopiedFallback);
+  });
+}
+
+function liveClearLog(){
+  if(_liveLogEl) _liveLogEl.innerHTML='';
+  liveLog(i18n[lang].liveLogCleared);
+}
+
+function liveToggleHelp(){
+  var body=document.getElementById('live-help-body');
+  var arrow=document.getElementById('live-help-arrow');
+  if(body.style.display==='none'){
+    body.style.display='block';arrow.textContent='▼';
+  } else {
+    body.style.display='none';arrow.textContent='▶';
+  }
+}
+
+// 拖拽手柄
+function initLiveDragHandle(){
+  var handle=document.getElementById('live-handle');
+  var panel=document.getElementById('live-panel');
+  var dragging=false;
+  handle.addEventListener('mousedown',function(e){
+    e.preventDefault();dragging=true;
+    handle.classList.add('dragging');
+    document.body.style.cursor='col-resize';document.body.style.userSelect='none';
+  });
+  document.addEventListener('mousemove',function(e){
+    if(!dragging) return;
+    var w=document.documentElement.clientWidth-e.clientX;
+    w=Math.max(200,Math.min(600,w));
+    panel.style.width=w+'px';handle.style.right=w+'px';
+    resize(); // 拖拽时实时重绘树
+  });
+  document.addEventListener('mouseup',function(){
+    if(!dragging) return;
+    dragging=false;handle.classList.remove('dragging');
+    document.body.style.cursor='';document.body.style.userSelect='';
+    resize(); // 拖拽结束最终确认
+  });
+}
+
+resize();
+fetchTasks();
+</script>
+
+</body>
+</html>
