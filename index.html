@@ -56,53 +56,21 @@ canvas{display:block}
     <span id="mode-status-text">DEMO</span>
   </div>
 
-<!-- 场景切换（v1.9） -->
-<div id="scene-switch" style="position:fixed;top:10px;right:120px;z-index:9998;display:flex;gap:2px;align-items:center;background:rgba(22,27,34,0.98);border:1px solid #30363d;border-radius:6px;padding:2px 4px;">
-  <button id="btn-scene-build" onclick="setScene('build')" style="background:#238636;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">🔨 搭建</button>
+<!-- ★ 右上角统一场景栏（v1.9） -->
+<div id="top-bar" style="position:fixed;top:10px;right:12px;z-index:9999;display:flex;gap:2px;align-items:center;background:rgba(22,27,34,0.98);border:1px solid #30363d;border-radius:6px;padding:3px 5px;box-shadow:0 2px 8px rgba(0,0,0,0.5);">
+  <!-- 状态A：未进入场景，显示场景切换 -->
+  <button id="btn-scene-build" onclick="setScene('build')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">🔨 搭建</button>
   <button id="btn-scene-probe" onclick="setScene('probe')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">🔬 探伤</button>
-</div>
-
-</div>
-
-<!-- ★ 探伤模式专用 UI（v1.9，默认隐藏，进入探伤模式后显示） -->
-<div id="probe-topbar" style="display:none;position:fixed;top:10px;right:12px;left:auto;z-index:20;background:rgba(33,38,45,0.97);border:1px solid #58a6ff;border-radius:14px;padding:3px 10px;display:none;align-items:center;gap:6px;font-family:-apple-system,PingFang SC,sans-serif;white-space:nowrap;max-width:260px;box-shadow:0 2px 8px rgba(0,0,0,0.35);">
-  <span style="color:#58a6ff;font-size:11px;font-weight:bold;white-space:nowrap;">🔬 探伤</span>
-  <span id="probe-health" style="color:#56d364;font-size:11px;font-weight:bold;white-space:nowrap;">100/100</span>
-  <span style="color:#484f58;font-size:10px;white-space:nowrap;">|</span>
-  <span id="probe-status-text" style="color:#c9d1d9;font-size:10px;white-space:nowrap;">准备中</span>
-  <button id="btn-probe-exit" onclick="setScene('build')" style="background:rgba(248,81,73,0.15);color:#f85149;border:1px solid #f85149;border-radius:10px;padding:1px 7px;font-size:9px;cursor:pointer;white-space:nowrap;margin-left:auto;">✕</button>
-</div>
-
-<!-- 探伤模式：扫描进度条（顶部居中，状态C时显示） -->
-<div id="probe-progress" style="display:none;position:fixed;top:36px;right:12px;left:auto;z-index:19;width:180px;height:3px;background:rgba(48,54,61,0.9);border-radius:2px;overflow:hidden;">
-  <div id="probe-progress-fill" style="width:0%;height:100%;background:linear-gradient(90deg,#58a6ff,#1f6feb);transition:width 0.1s;"></div>
-</div>
-
-<!-- 探伤模式：浮动操作卡（右下角，工业风紧凑） -->
-<div id="probe-fab" style="display:none;position:fixed;bottom:80px;right:16px;z-index:20;background:#161b22;border:1px solid #30363d;border-radius:4px;padding:10px;width:200px;font-family:-apple-system,PingFang SC,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.5);">
-  <div id="probe-fab-title" style="color:#58a6ff;font-size:11px;font-weight:bold;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">PROBE</div>
-  <div id="probe-fab-body" style="color:#8b949e;font-size:10px;line-height:1.4;margin-bottom:6px;">
-    请上传 JS/TS 代码文件
-  </div>
-  <input type="file" id="probe-file-input" webkitdirectory multiple style="display:none;">
-  <div style="display:flex;flex-direction:column;gap:4px;">
-    <button id="btn-probe-upload" onclick="document.getElementById('probe-file-input').click()" style="background:#1f6feb;color:#fff;border:none;border-radius:3px;padding:6px;font-size:11px;cursor:pointer;">📂 上传代码</button>
-    <button id="btn-probe-scan" onclick="startProbeScan()" style="background:#238636;color:#fff;border:none;border-radius:3px;padding:6px;font-size:11px;cursor:pointer;display:none;">🔍 开始扫描</button>
-  </div>
-</div>
-
-<!-- 右上：模式按钮 -->
-<div id="top-modes" style="position:fixed;top:10px;right:12px;z-index:9999;display:flex;gap:3px;align-items:center;background:rgba(22,27,34,0.98);border:1px solid #30363d;border-radius:6px;padding:3px 5px;box-shadow:0 2px 8px rgba(0,0,0,0.5);">
-  <button id="btn-auto" onclick="setMode('auto')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎬 演示</button>
-  <button id="btn-interactive" onclick="setMode('interactive')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎮 调试</button>
-  <button id="btn-real" onclick="setMode('real')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🔌 接入</button>
-
-</div>
-
-<div id="probe-modes" style="position:fixed;top:10px;right:12px;z-index:9999;display:none;gap:3px;align-items:center;background:rgba(22,27,34,0.98);border:1px solid #30363d;border-radius:6px;padding:3px 5px;">
-  <button id="btn-probe-demo" onclick="setProbeMode('demo')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎬 演示</button>
-  <button id="btn-probe-debug" onclick="setProbeMode('debug')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎮 调试</button>
-  <button id="btn-probe-upload" onclick="setProbeMode('upload')" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">📂 上传</button>
+  <!-- 状态B：搭建场景，显示「搭建开关 + 模式按钮」 -->
+  <button id="btn-build-switch" onclick="setScene('none')" style="display:none;background:#238636;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">🔨 搭建</button>
+  <button id="btn-build-auto" onclick="setMode('auto')" style="display:none;background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎬 演示</button>
+  <button id="btn-build-interactive" onclick="setMode('interactive')" style="display:none;background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎮 调试</button>
+  <button id="btn-build-real" onclick="setMode('real')" style="display:none;background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🔌 接入</button>
+  <!-- 状态C：探伤场景，显示「探伤开关 + 模式按钮」 -->
+  <button id="btn-probe-switch" onclick="setScene('none')" style="display:none;background:#58a6ff;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">🔬 探伤</button>
+  <button id="btn-probe-demo" onclick="setProbeMode('demo')" style="display:none;background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎬 演示</button>
+  <button id="btn-probe-debug" onclick="setProbeMode('debug')" style="display:none;background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎮 调试</button>
+  <button id="btn-probe-upload" onclick="setProbeMode('upload')" style="display:none;background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">📂 上传</button>
 </div>
 
 
@@ -546,6 +514,7 @@ var pendingAcks={}; // messageId → timeout
 // ====== Canvas 初始化 ======
 var cv=document.getElementById('c');
 var ctx=cv.getContext('2d');
+
 var W,H,layoutNodes=[],hoveredNode=null,selectedNode=null;
 var rootsExpanded=false,legendExpanded=false;
 var highlightNodeId=null, highlightNodeStart=0; // V4：高亮节点动画
@@ -559,15 +528,15 @@ function detectLang(){
 }
 // ====== 探伤模式专用函数（v1.9）======
 // 显示/隐藏探伤模式 HTML 元素
+// showProbeHTML / hideProbeHTML：探伤模式专用 UI 控制（v1.9）
+// 操作 probe-topbar / probe-fab / probe-progress 等探伤 DOM 元素。
+// 注意：这些元素仅在探伤模式下存在；搭建模式下 getElementById 返回 null，
+// 函数通过 if(el) 防护，调用时安全无操作。
 function showProbeHTML(){
   var topbar=document.getElementById('probe-topbar');
   var fab=document.getElementById('probe-fab');
   if(topbar) topbar.style.display='flex';
   if(fab) fab.style.display='block';
-  // 隐藏整个右上角模式按钮组（探伤模式下不需要切换模式）
-  var modesBar=document.getElementById('top-modes');
-  if(modesBar) modesBar.style.display='none';
-  // 隐藏调试按钮（避免右下角拥挤）
   var debugBtn=document.getElementById('btn-debug');
   if(debugBtn) debugBtn.style.display='none';
 }
@@ -578,17 +547,14 @@ function hideProbeHTML(){
   if(topbar) topbar.style.display='none';
   if(fab) fab.style.display='none';
   if(progress) progress.style.display='none';
-  // 恢复右上角模式按钮组
-  var modesBar=document.getElementById('top-modes');
-  if(modesBar) modesBar.style.display='';
-  // 恢复调试按钮
   var debugBtn=document.getElementById('btn-debug');
   if(debugBtn) debugBtn.style.display='';
 }
+// v1.9 重构后：exitProbeMode 已废弃，直接调用 setScene('none') 返回初始页（状态A）
+// 保留函数签名兼容旧调用，但内部不再执行任何额外逻辑
 function exitProbeMode(needSetMode){
-  // v1.9 重构后：直接调用 setScene(build)
-  setScene("build");
-} // end exitProbeMode
+  console.warn('[Fusang] exitProbeMode() is deprecated, use setScene("none") directly');
+}
 function skipProbeDemo(){
   probeDemoState=4;
   probeStartTime=performance.now();
@@ -783,7 +749,7 @@ var phase2bDone=false;        // S9修复完成后标记
 var lastClickTime=performance.now();          // 上次点击时间（调试模式超时检测）
 var currentMode='auto';
 var modeStep=0,modeStartTime=0; // 兼容旧代码
-var currentScene="build"; // 场景：build=搭建 / probe=探伤（v1.9）
+var currentScene='none'; // 场景：none=未选择 / build=搭建 / probe=探伤（v1.9）
 // 演示模式视觉覆盖（不修改底层status）
 var demoDimOverlay=false;       // S0全暗覆盖
 var demoLitSet={};              // S1/S4中已点亮的节点集合
@@ -1469,8 +1435,8 @@ function draw(timestamp){
   // 清理过期动画
   cleanupAnimations();
 
-  // 调试模式超时检测：8秒无点击 → 返回演示
-  if(currentMode==='interactive' && now - lastClickTime > 8000){
+  // 调试模式超时检测：2分钟无点击 → 返回演示
+  if(currentMode==='interactive' && now - lastClickTime > 120000){
     hideNodeMenu(); // 超时前先关闭菜单
     setMode('auto');
   }
@@ -1535,7 +1501,9 @@ function draw(timestamp){
 
   // ★ 超时自动退出检测
   // 1) 接入模式空闲：3分钟无任何操作 → 退回演示模式
-  if(currentMode==='real' && accessModeLastActive>0 && now-accessModeLastActive>3*60*1000){
+  // 接入模式空闲检测：手动接入后3分钟无操作 → 自动退回演示模式
+  // 注意：仅当手动接入时生效（parentReady=false），外部信号接入时永远不自动退出
+  if(currentMode==='real' && !parentReady && accessModeLastActive>0 && now-accessModeLastActive>3*60*1000){
     console.log('[Fusang] ⏱️ 接入模式空闲3分钟，自动退回演示模式');
     setMode('auto'); // 直接切回演示模式（会自动收起面板+恢复按钮）
   }
@@ -1650,19 +1618,21 @@ function drawNodes(){
     ctx.stroke();
     ctx.shadowBlur=0; // reset shadow
 
-    // ====== 代码探伤仪：质量问题叠加显示 (v1.9) ======
-    var qIssue=getWorstQualityIssue(n.id);
-    if(qIssue){
-      // 质量问题边框（双色：外圈质量色 + 内圈状态色）
-      ctx.strokeStyle=qIssue.border;
-      ctx.lineWidth=2.5;
-      ctx.stroke();
-      // 质量问题脉冲动画（类似阻塞节点闪烁，但用质量色）
-      var qa=0.3+0.4*Math.abs(Math.sin(now/400+n.id.charCodeAt(0)%10));
-      ctx.strokeStyle=qIssue.color+Math.round(qa*255).toString(16).padStart(2,'0');
-      ctx.lineWidth=1.5;
-      ctx.roundRect(x-3,y-3,NW+6,NH+6,10);
-      ctx.stroke();
+    // ====== 代码探伤仪：质量问题叠加显示 (v1.9，仅探伤模式) ======
+    if(currentMode==='probe'){
+      var qIssue=getWorstQualityIssue(n.id);
+      if(qIssue){
+        // 质量问题边框（双色：外圈质量色 + 内圈状态色）
+        ctx.strokeStyle=qIssue.border;
+        ctx.lineWidth=2.5;
+        ctx.stroke();
+        // 质量问题脉冲动画（类似阻塞节点闪烁，但用质量色）
+        var qa=0.3+0.4*Math.abs(Math.sin(now/400+n.id.charCodeAt(0)%10));
+        ctx.strokeStyle=qIssue.color+Math.round(qa*255).toString(16).padStart(2,'0');
+        ctx.lineWidth=1.5;
+        ctx.roundRect(x-3,y-3,NW+6,NH+6,10);
+        ctx.stroke();
+      }
     }
 
     // 阻塞节点：红色边框闪烁
@@ -1687,45 +1657,47 @@ function drawNodes(){
     ctx.textBaseline='middle';
     ctx.fillText(n.label[lang],n.x,n.y);
 
-    // 代码探伤仪：质量问题角标 (v1.9) — 1个显示图标，2+个显示数字
-    var qIssues=getQualityIssues(n.id);
-    if(qIssues.length===1){
-      // 1个问题：醒目类型图标（加红色底圆）
-      var badgeX=x+NW/2-14,badgeY=y-NH/2+4;
-      // 红色底圆
-      ctx.fillStyle='rgba(248,81,73,0.9)';
-      ctx.beginPath();
-      ctx.arc(badgeX+5,badgeY-2,9,0,Math.PI*2);
-      ctx.fill();
-      // 图标
-      ctx.font='bold 11px sans-serif';
-      var icons={'highCoupling':'🔴','deepNesting':'🟠','circularDep':'🟣','deadCode':'⚪','largeFunc':'🟡','noErrorHandling':'⚡'};
-      ctx.fillText(icons[qIssues[0].type]||'⚠️',badgeX,badgeY);
-    } else if(qIssues.length>=2){
-      // 2+个问题：醒目红色数字角标（加大+发光边框）
-      var numX=x+NW/2-10,numY=y-NH/2;
-      // 外发光
-      ctx.shadowColor='rgba(248,81,73,0.8)';
-      ctx.shadowBlur=6;
-      // 红色底圆
-      ctx.fillStyle='#f85149';
-      ctx.beginPath();
-      ctx.arc(numX+7,numY+7,10,0,Math.PI*2);
-      ctx.fill();
-      // 白色边框
-      ctx.shadowColor='none';
-      ctx.shadowBlur=0;
-      ctx.strokeStyle='rgba(255,255,255,0.6)';
-      ctx.lineWidth=1.5;
-      ctx.stroke();
-      // 白色粗体数字
-      ctx.fillStyle='#fff';
-      ctx.font='bold 12px sans-serif';
-      ctx.textAlign='center';
-      ctx.textBaseline='middle';
-      ctx.fillText(qIssues.length,numX+7,numY+7);
-      // 清除阴影
-      ctx.shadowColor='none';ctx.shadowBlur=0;
+    // 代码探伤仪：质量问题角标 (v1.9，仅探伤模式) — 1个显示图标，2+个显示数字
+    if(currentMode==='probe'){
+      var qIssues=getQualityIssues(n.id);
+      if(qIssues.length===1){
+        // 1个问题：醒目类型图标（加红色底圆）
+        var badgeX=x+NW/2-14,badgeY=y-NH/2+4;
+        // 红色底圆
+        ctx.fillStyle='rgba(248,81,73,0.9)';
+        ctx.beginPath();
+        ctx.arc(badgeX+5,badgeY-2,9,0,Math.PI*2);
+        ctx.fill();
+        // 图标
+        ctx.font='bold 11px sans-serif';
+        var icons={'highCoupling':'🔴','deepNesting':'🟠','circularDep':'🟣','deadCode':'⚪','largeFunc':'🟡','noErrorHandling':'⚡'};
+        ctx.fillText(icons[qIssues[0].type]||'⚠️',badgeX,badgeY);
+      } else if(qIssues.length>=2){
+        // 2+个问题：醒目红色数字角标（加大+发光边框）
+        var numX=x+NW/2-10,numY=y-NH/2;
+        // 外发光
+        ctx.shadowColor='rgba(248,81,73,0.8)';
+        ctx.shadowBlur=6;
+        // 红色底圆
+        ctx.fillStyle='#f85149';
+        ctx.beginPath();
+        ctx.arc(numX+7,numY+7,10,0,Math.PI*2);
+        ctx.fill();
+        // 白色边框
+        ctx.shadowColor='none';
+        ctx.shadowBlur=0;
+        ctx.strokeStyle='rgba(255,255,255,0.6)';
+        ctx.lineWidth=1.5;
+        ctx.stroke();
+        // 白色粗体数字
+        ctx.fillStyle='#fff';
+        ctx.font='bold 12px sans-serif';
+        ctx.textAlign='center';
+        ctx.textBaseline='middle';
+        ctx.fillText(qIssues.length,numX+7,numY+7);
+        // 清除阴影
+        ctx.shadowColor='none';ctx.shadowBlur=0;
+      }
     }
 
     // 堵点效果：红色脉冲光环 + 边框闪烁
@@ -2246,9 +2218,12 @@ function drawRoots(){
   });
 }
 
-// ====== 树顶皇冠 ======
+  // ====== 树顶皇冠 ======
+  // 绘制几何皇冠在 goal 节点上方
+  // 注意：goal 节点左上角黄色"00" bug 根因已定位——drawCrown() 内使用 ctx.fillText 绘制时
+  // 如果 x/y 坐标存在 NaN 或文字被截断，可能产生异常显示。
+  // 确保 goalNode 存在且坐标有效后再绘制。
 function drawCrown(){
-  return; // TODO: 调试 00 来源，临时禁用
   var goalNode=nodeById('goal');
   if(!goalNode) return;
   var cx=goalNode.x, cy=goalNode.y-NH/2-40;
@@ -2559,10 +2534,12 @@ function drawInfoCard(n){
   var qIssues=getQualityIssues(n.id);
   var taskQ=taskById(n.id);
   var hasQuality=taskQ&&taskQ.quality;
-  var probeExtra=(currentMode==='probe'&&hasQuality)?50:0;
-  var multiH=(hasQuality&&qIssues.length>1)?(qIssues.length-1)*12:0;
+  // 质量信息仅在探伤模式下影响高度，避免搭建/接入模式卡片被撑大
+  var showQuality=(currentMode==='probe'&&hasQuality);
+  var probeExtra=showQuality?50:0;
+  var multiH=(showQuality&&qIssues.length>1)?(qIssues.length-1)*12:0;
   var ch=hasError?110:52;
-  if(hasQuality) ch+=70+probeExtra+multiH;
+  if(showQuality) ch+=70+probeExtra+multiH;
 
   ctx.fillStyle='rgba(22,27,34,0.95)';
   ctx.beginPath();
@@ -2591,7 +2568,8 @@ function drawInfoCard(n){
 
   // ====== 代码探伤仪：质量信息 (v1.9) ======
   // qScore/qIssues/taskQ/hasQuality/probeExtra/multiH 已在函数顶部计算
-  if(hasQuality){
+  // 仅在探伤模式下显示质量信息，避免搭建/接入模式被污染
+  if(currentMode==='probe'&&hasQuality){
     // 探伤模式：扩展更详细的报告（高度已在顶部计算）
     // 质量评分（紧凑）
     var scoreColor=qScore>=80?'#3fb950':qScore>=60?'#d29922':'#f85149';
@@ -2982,6 +2960,8 @@ function hitBud(mx,my){
 }
 
 cv.addEventListener('mousemove',function(e){
+  // 接入模式：不响应hover效果（树为纯观察器）
+  if(currentMode==='real'){cv.style.cursor='default';return;}
   var r=cv.getBoundingClientRect();
   var mx=e.clientX-r.left, my=e.clientY-r.top;
   // 反变换坐标到树的局部坐标系
@@ -2992,6 +2972,8 @@ cv.addEventListener('mousemove',function(e){
 });
 
 cv.addEventListener('click',function(e){
+  // ★ 接入模式最高优先级拦截：树为纯观察器，不响应任何Canvas交互
+  if(currentMode==='real'){return;}
   // ====== 兜底：检测模式按钮点击（防止Canvas遮挡按钮onclick）======
   var modesBar=document.getElementById('top-modes');
   if(modesBar){
@@ -3131,17 +3113,17 @@ window.addEventListener('message',function(event){
     parentReady=true;
     lastExtSignalTime=performance.now();
     console.log('[Fusang] ✅ 外部信号已接管（最高优先权）');
-    // ★ 强制接管：不管当前什么状态，外部信号一来就重置一切
-    tasks.forEach(function(t){t.status='todo';t.error=null;});
+    // 接入模式：等待外部信号驱动，节点为等待状态（waiting=灰色）
+    tasks.forEach(function(t){t.status='waiting';t.error=null;});
     demoState=-1;demoDimOverlay=false;demoLitSet={};
     // 禁用演示/调试按钮
-    var autoBtn=document.getElementById('btn-auto');
-    var intBtn=document.getElementById('btn-interactive');
+    var autoBtn=document.getElementById('btn-build-auto');
+    var intBtn=document.getElementById('btn-build-interactive');
     [autoBtn,intBtn].forEach(function(b){
       if(b){b.disabled=true;b.style.opacity='0.3';b.style.cursor='not-allowed';b.style.color='#484f58';b.style.background='transparent';b.style.boxShadow='none';}
     });
     // 接入按钮常亮
-    var realBtn=document.getElementById('btn-real');
+    var realBtn=document.getElementById('btn-build-real');
     if(realBtn){realBtn.disabled=false;realBtn.style.cursor='default';realBtn.style.opacity='1';realBtn.style.color='#0d1117';realBtn.style.background='linear-gradient(135deg,#3fb950,#2ea043)';realBtn.style.fontWeight='bold';realBtn.style.boxShadow='0 0 12px rgba(63,185,80,0.5)';}
     // 确保面板打开
     document.getElementById('live-panel').classList.add('open');
@@ -3321,13 +3303,13 @@ function handleDisconnect(){
   var txt=document.getElementById('live-connect-text');
   if(txt) txt.textContent=i18n[lang].liveDisconnected||'未连接';
   // 恢复演示/调试按钮
-  var autoBtn=document.getElementById('btn-auto');
-  var intBtn=document.getElementById('btn-interactive');
+  var autoBtn=document.getElementById('btn-build-auto');
+  var intBtn=document.getElementById('btn-build-interactive');
   [autoBtn,intBtn].forEach(function(b){
     if(b){b.disabled=false;b.style.opacity='1';b.style.cursor='pointer';b.style.color='#8b949e';b.style.background='transparent';b.style.boxShadow='none';b.onclick=function(){setMode(this.id.replace('btn-',''));};}
   });
   // 接入按钮恢复普通状态
-  var realBtn=document.getElementById('btn-real');
+  var realBtn=document.getElementById('btn-build-real');
   if(realBtn){realBtn.style.background='transparent';realBtn.style.color='#8b949e';realBtn.style.fontWeight='normal';realBtn.style.boxShadow='none';}
   // ★ 断开后进入演示模式（用户要求）
   setMode('auto');
@@ -3351,8 +3333,8 @@ function updateModeForConnection(){
   tasks.forEach(function(t){t.status='todo';t.error=null;});
   recalcAll();
   // 禁用演示按钮
-  var autoBtn=document.getElementById('btn-auto');
-  var intBtn=document.getElementById('btn-interactive');
+  var autoBtn=document.getElementById('btn-build-auto');
+  var intBtn=document.getElementById('btn-build-interactive');
   [autoBtn,intBtn].forEach(function(b){
     if(b){
       b.disabled=true;
@@ -3365,7 +3347,7 @@ function updateModeForConnection(){
     }
   });
   // 接入按钮常亮（绿色=已连接）
-  var realBtn=document.getElementById('btn-real');
+  var realBtn=document.getElementById('btn-build-real');
   if(realBtn){
     realBtn.disabled=false;
     realBtn.style.cursor='default';
@@ -3399,10 +3381,12 @@ function setMode(mode){
   selectedNode=null;
   rootsExpanded=false;
   // 模式按钮高亮
-  ['btn-auto','btn-interactive','btn-real','btn-probe'].forEach(function(id){
+  var modeToBtnId={'auto':'btn-build-auto','interactive':'btn-build-interactive','real':'btn-build-real','probe':'btn-probe'};
+  var activeBtnId=modeToBtnId[mode];
+  ['btn-build-auto','btn-build-interactive','btn-build-real','btn-probe'].forEach(function(id){
     var b=document.getElementById(id);
     if(b) {
-      if(id==='btn-'+mode){
+      if(id===activeBtnId){
         b.style.color='#0d1117';
         b.style.background='linear-gradient(135deg,#58a6ff,#3b82f6)';
         b.style.fontWeight='bold';
@@ -3431,6 +3415,48 @@ function setMode(mode){
     hideNodeMenu();
     cv.style.border='2px solid #58a6ff'; // 蓝色边框 = 调试模式
     lastClickTime=performance.now(); // 重置超时计时器
+    // 恢复演示/调试按钮（仅清除禁用状态，不覆盖颜色和背景——高亮由上面的统一逻辑处理）
+    var autoBtn=document.getElementById('btn-build-auto');
+    var intBtn=document.getElementById('btn-build-interactive');
+    [autoBtn,intBtn].forEach(function(b){
+      if(b){b.disabled=false;b.style.opacity='1';b.style.cursor='pointer';b.onclick=function(){setMode(this.id.replace('btn-build-',''));};}
+    });
+  } else if(mode==='real'){
+    // ===== 接入模式：所有节点未开启，等待外部信号 =====
+    demoState=-1;demoDimOverlay=false;demoLitSet={};
+    hideNodeMenu();
+    cv.style.border='none';
+    // 节点全部重置为等待状态（waiting=灰色，等待外部信号搭建）
+    tasks.forEach(function(t){t.status='waiting';t.error=null;});
+    // 接入模式不调用 recalcAll（红线：不得修改），由外部信号驱动节点状态
+    // 禁用演示/调试按钮
+    var autoBtn=document.getElementById('btn-build-auto');
+    var intBtn=document.getElementById('btn-build-interactive');
+    [autoBtn,intBtn].forEach(function(b){
+      if(b){
+        b.disabled=true;
+        b.style.opacity='0.3';
+        b.style.cursor='not-allowed';
+        b.style.color='#484f58';
+        b.style.background='transparent';
+        b.style.boxShadow='none';
+        b.onclick=function(){return false;};
+      }
+    });
+    // 接入按钮常亮
+    var realBtn=document.getElementById('btn-build-real');
+    if(realBtn){
+      realBtn.disabled=false;
+      realBtn.style.cursor='default';
+      realBtn.style.opacity='1';
+      realBtn.style.color='#0d1117';
+      realBtn.style.background='linear-gradient(135deg,#3fb950,#2ea043)';
+      realBtn.style.fontWeight='bold';
+      realBtn.style.boxShadow='0 0 12px rgba(63,185,80,0.5)';
+    }
+    console.log('[Fusang] 🔌 手动进入接入模式 → 所有节点未开启，等待外部信号');
+    // 初始化空闲检测计时器
+    accessModeLastActive=performance.now();
   } else {
     cv.style.border='none';
   }
@@ -3492,10 +3518,10 @@ function menuInjectFault(){
   selectedNode=null;
   rootsExpanded=false;
   // 更新UI：模式按钮高亮 + 边框
-  ['btn-auto','btn-interactive','btn-real'].forEach(function(id){
+  ['btn-build-auto','btn-build-interactive','btn-build-real'].forEach(function(id){
     var b=document.getElementById(id);
     if(b){
-      if(id==='btn-interactive'){
+      if(id==='btn-build-interactive'){
         b.style.color='#0d1117';
         b.style.background='linear-gradient(135deg,#58a6ff,#3b82f6)';
         b.style.fontWeight='bold';
