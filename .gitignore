@@ -1,26 +1,42 @@
-# WorkBuddy memory (project-local, not for GitHub)
-.workbuddy/
+# ==================== AI-Fusang .gitignore ====================
+# 备份文件（任何 .bak / .bak-* 结尾）
+*.bak
+*.bak-*
+index.html.bak-*
+scene-switch.js.bak-*
 
-# Node modules (if any tooling added later)
-node_modules/
-analyzer/node_modules/
+# 截图（开发/测试期间生成）
+screenshot-*.png
+preview-*.png
+center-*.png
+verify-*.png
 
-# Build output
-dist/
-build/
+# 临时测试文件
+test-*.html
+probe-preview.html
 
-# Temp files
-*.tmp
-*.log
+# Release 临时 payload
+release-payload.json
+
+# 设计稿
+design-mockup.html
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 系统
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# IDE
+# 编辑器
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# Project config (local)
-project.config.json
-project.private.config.json
+# Node
+node_modules/
+npm-debug.log*

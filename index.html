@@ -8,6 +8,30 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <style>
+/* ===== v3 规范 CSS 变量（阶段 1 新增 · 不动现有代码）===== */
+:root{
+  --bg-deepest:#0a0e1a;
+  --bg-base:#0d1117;
+  --bg-raised:#161b22;
+  --border:#30363d;
+  --border-soft:#21262d;
+  --text-primary:#e6edf3;
+  --text-secondary:#c9d1d9;
+  --text-muted:#8b949e;
+  --text-faint:#6e7681;
+  --accent:#58a6ff;
+  --success:#3fb950;
+  --warning:#d29922;
+  --danger:#f85149;
+  --purple:#a371f7;
+  --gray:#6e7681;
+  --font-mono:'JetBrains Mono','Consolas','SF Mono',monospace;
+  --font-sans:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;
+  --font-size-h3:13px;
+  --font-size-body:12px;
+  --font-size-help:11px;
+  --font-size-data:10px;
+}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden;background:#0d1117;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif}
 canvas{display:block}
@@ -40,6 +64,8 @@ canvas{display:block}
 .live-switch.on{background:#0d2818;color:#3fb950;border-color:#3fb950;box-shadow:0 0 5px rgba(63,185,80,0.2);}
 .live-switch:disabled{opacity:0.25;cursor:not-allowed;}
 .live-toggle-text{font-weight:bold;letter-spacing:1px;}
+/* 探伤面板信号灯闪烁动画（v1.9.2） */
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.4}}
 </style>
 </head>
 <body>
@@ -71,6 +97,7 @@ canvas{display:block}
   <button id="btn-probe-demo" onclick="setProbeMode('demo')" style="display:none;background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎬 演示</button>
   <button id="btn-probe-debug" onclick="setProbeMode('debug')" style="display:none;background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">🎮 调试</button>
   <button id="btn-probe-upload" onclick="setProbeMode('upload')" style="display:none;background:transparent;color:#8b949e;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;">📂 上传</button>
+  <button id="btn-probe-legend" onclick="toggleProbeLegend()" style="background:transparent;color:#8b949e;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;" title="图例说明">📊</button>
 </div>
 
 
@@ -136,8 +163,92 @@ canvas{display:block}
 <!-- 调试模式：节点操作弹出菜单 -->
 <div id="node-menu" style="position:fixed;z-index:100;display:none;min-width:140px;background:rgba(22,27,34,0.98);border:1px solid #30363d;border-radius:8px;padding:6px 0;box-shadow:0 8px 24px rgba(0,0,0,0.5);"></div>
 
+<!-- ★ 探伤模式：顶部状态栏（v1.9.3 工业级优化） -->
+<div id="probe-topbar" style="display:none;position:fixed;top:40px;right:12px;left:auto;z-index:9998;background:rgba(22,27,34,0.7);border:1px solid #2a2a4a;border-radius:3px;padding:6px 12px;font-size:11px;color:#c9d1d9;align-items:center;gap:10px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 2px 8px rgba(0,0,0,0.3);white-space:nowrap;">
+  <span id="probe-status-text" style="color:#8b949e;">准备中</span>
+  <span style="color:#2a2a4a;">|</span>
+  <span>  <span id="probe-health-label" style="color:#484f58;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;margin-right:2px;">HEALTH</span> <span id="probe-health" style="color:#56d364;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;">100/100</span></span>
+</div>
+
+<!-- ★ 探伤模式：扫描进度条（v1.9） -->
+<div id="probe-progress" style="display:none;position:fixed;top:72px;left:50%;transform:translateX(-50%);z-index:9998;width:200px;height:4px;background:#21262d;border-radius:2px;overflow:hidden;">
+  <div id="probe-progress-fill" style="width:0%;height:100%;background:linear-gradient(90deg,#58a6ff,#a371f7);border-radius:2px;transition:width 0.1s;"></div>
+</div>
+
+<!-- ★ 探伤模式：右下角工业化操作面板（v1.9.3 工业级优化） -->
+<div id="probe-fab" style="display:none;position:fixed;bottom:50px;right:12px;z-index:9998;width:32px;height:32px;border-radius:50%;background:rgba(26,26,46,0.85);border:1px solid #2a2a4a;padding:0;box-shadow:0 2px 16px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.03);overflow:hidden;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);">
+  <!-- 顶部微光条 -->
+  <div style="height:1px;background:linear-gradient(90deg,transparent,rgba(0,212,255,0.15),transparent);width:100%;"></div>
+  <!-- 信号灯头部（32px 圆点态：只显示探伤 icon，文字 tooltip 提示） -->
+  <div id="probe-fab-header" style="display:flex;align-items:center;justify-content:center;gap:0;padding:0;height:100%;background:transparent;border:none;" title="探伤面板 · 点击展开">
+    <div id="probe-fab-dot" style="width:6px;height:6px;border-radius:50%;position:absolute;top:4px;right:4px;background:#484f58;"></div>
+    <div id="probe-fab-icon" style="font-size:13px;font-weight:700;line-height:1;color:#58a6ff;font-family:-apple-system,PingFang SC,sans-serif;">P</div>
+    <div id="probe-fab-label" style="display:none;font-size:11px;font-weight:600;letter-spacing:0.5px;color:#484f58;">PROBE</div>
+  </div>
+  <!-- 数据行区域 -->
+  <div id="probe-fab-rows"></div>
+  <!-- 按钮区域 -->
+  <div id="probe-fab-btns"></div>
+  <!-- 隐藏的文件输入 -->
+  <input id="probe-file-input" type="file" webkitdirectory multiple style="display:none;">
+</div>
+
 <!-- 右下角：调试按钮 -->
 <button id="btn-debug" onclick="toggleDebug()" style="position:fixed;bottom:12px;right:12px;z-index:10;background:rgba(33,38,45,0.92);color:#f0883e;border:1px solid #30363d;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;" title="Debug Console">🐛</button>
+
+<!-- ★ v1.9.6 探伤模式：多问题中央详情弹窗（画布外HTML，默认隐藏） -->
+<!-- ★ v1.9 探伤图例：全屏 overlay（点击背景或×关闭） -->
+<div id="probe-legend" onclick="if(event.target===this)toggleProbeLegend()" style="display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);align-items:center;justify-content:center;font-family:-apple-system,PingFang SC,sans-serif;">
+  <div style="width:680px;max-width:94vw;max-height:86vh;overflow-y:auto;background:#0d1117;border:1px solid #30363d;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,0.7);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #21262d;">
+      <span style="font-size:14px;font-weight:600;color:#e6edf3;letter-spacing:0.5px;">📊 探伤模式 · 图例说明</span>
+      <span onclick="toggleProbeLegend()" style="cursor:pointer;color:#8b949e;font-size:18px;line-height:1;padding:0 4px;" title="关闭 (ESC)">×</span>
+    </div>
+    <div style="padding:16px 18px;color:#c9d1d9;font-size:12px;line-height:1.7;">
+      <div style="color:#8b949e;font-size:10px;letter-spacing:2px;margin:8px 0 6px;">▌ 节点状态（边框颜色）</div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px 16px;margin-bottom:14px;">
+        <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#56d364;margin-right:6px;vertical-align:middle;"></span>正常（健康）</div>
+        <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#d29922;margin-right:6px;vertical-align:middle;"></span>告警（待处理）</div>
+        <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f85149;margin-right:6px;vertical-align:middle;"></span>故障（必修）</div>
+        <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#a371f7;margin-right:6px;vertical-align:middle;"></span>运行环境（紫色）</div>
+      </div>
+      <div style="color:#8b949e;font-size:10px;letter-spacing:2px;margin:14px 0 6px;">▌ 9 类问题徽章（数字）</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;">
+        <div><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(248,81,73,0.9);color:#fff;font-size:10px;text-align:center;line-height:18px;margin-right:6px;">H</span>高耦合</div>
+        <div><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(248,81,73,0.9);color:#fff;font-size:10px;text-align:center;line-height:18px;margin-right:6px;">C</span>高复杂度</div>
+        <div><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(248,81,73,0.9);color:#fff;font-size:10px;text-align:center;line-height:18px;margin-right:6px;">⊕</span>循环依赖</div>
+        <div><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(210,153,34,0.9);color:#fff;font-size:10px;text-align:center;line-height:18px;margin-right:6px;">F</span>超大函数</div>
+        <div><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(210,153,34,0.9);color:#fff;font-size:10px;text-align:center;line-height:18px;margin-right:6px;">N</span>深层嵌套</div>
+        <div><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(210,153,34,0.9);color:#fff;font-size:10px;text-align:center;line-height:18px;margin-right:6px;">E</span>无错误处理</div>
+        <div><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(139,148,158,0.9);color:#fff;font-size:10px;text-align:center;line-height:18px;margin-right:6px;">D</span>重复代码</div>
+        <div><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(139,148,158,0.9);color:#fff;font-size:10px;text-align:center;line-height:18px;margin-right:6px;">×</span>死代码</div>
+        <div><span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(139,148,158,0.9);color:#fff;font-size:10px;text-align:center;line-height:18px;margin-right:6px;">G</span>全局变量</div>
+      </div>
+      <div style="color:#8b949e;font-size:10px;letter-spacing:2px;margin:14px 0 6px;">▌ 视觉信号</div>
+      <div style="color:#8b949e;font-size:11px;line-height:1.8;">
+        • 节点外圈<span style="color:#f85149;">红色光晕</span> = 检测到问题<br>
+        • 数字徽章 = 该节点问题数量<br>
+        • 点击节点 = 右侧抽屉显示详情<br>
+        • 左下"全局体检" = 整体健康分 + Top3 问题
+      </div>
+    </div>
+    <div style="padding:10px 18px;border-top:1px solid #21262d;color:#6e7681;font-size:10px;text-align:right;">按 ESC 或点击外部关闭</div>
+  </div>
+</div>
+<div id="probe-detail-overlay" style="display:none;position:fixed;inset:0;z-index:99999;background:transparent;" onclick="if(event.target===this)closeProbeDetail()">
+  <div id="probe-detail-card" style="position:absolute;width:320px;max-height:min(560px,80vh);overflow-y:auto;background:#0d1117;border:1px solid #30363d;border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,0.7);left:50%;top:50%;">
+    <div id="probe-detail-body"></div>
+  </div>
+</div>
+
+<!-- ★ v1.9.6 探伤模式：全局体检总览面板（画布外HTML，左下角，默认折叠，仅探伤模式显示） -->
+<div id="probe-overview" style="display:none;position:fixed;left:12px;bottom:12px;z-index:9997;width:auto;min-width:240px;max-width:380px;background:rgba(13,17,23,0.92);border:1px solid #30363d;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);overflow:hidden;font-family:-apple-system,PingFang SC,sans-serif;">
+  <div onclick="toggleProbeOverview()" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;user-select:none;">
+    <span style="font-size:12px;font-weight:600;color:#e6edf3;">📊 <span id="probe-ov-title">全局体检</span></span>
+    <span id="probe-ov-arrow" style="color:#8b949e;font-size:12px;">▼</span>
+  </div>
+  <div id="probe-ov-body" style="padding:0 12px 10px;"></div>
+</div>
 <div id="debug-panel" style="position:fixed;bottom:10px;right:10px;z-index:30;display:none;width:360px;max-height:300px;background:rgba(13,17,23,0.97);border:1px solid #30363d;border-radius:8px;overflow:hidden;">
   <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#161b22;border-bottom:1px solid #30363d;">
     <span style="color:#f0883e;font-size:12px;font-weight:bold;" id="debug-console-label">Debug Console</span>
@@ -343,6 +454,44 @@ function stressTest(){
   _assert('T7-rounds',roundOk,'3轮随机注入+修复后全绿');
   roundOk?pass++:fail++;
 
+  // === T8: 质量问题体系（v1.9.6 新增，测9种问题判定+4档档位）===
+  console.log('\n--- T8: 质量问题体系(9种判定+4档) ---');
+  // T8-1: 9种问题类型都能被 getQualityIssues 识别
+  _resetAll();
+  // 构造一个全问题节点
+  var t8Task=taskById('api');
+  t8Task.quality={coupling:12,cyclomaticComplexity:15,nestingDepth:6,linesOfCode:300,hasCircularDep:true,hasErrorHandling:false,duplicates:['x','y'],isDeadCode:true,globalVars:['g1','g2'],file:'a.ts',line:1};
+  var t8Issues=getQualityIssues('api');
+  var t8Types=t8Issues.map(function(i){return i.type;});
+  var expectTypes=['circularDep','highCoupling','highComplexity','largeFunc','deepNesting','noErrorHandling','duplicateCode','deadCode','globalVars'];
+  var allNine=expectTypes.every(function(tp){return t8Types.indexOf(tp)>=0;});
+  _assert('T8-9types',allNine,'9种问题类型全部识别 ('+t8Types.length+'/9)');
+  allNine?pass++:fail++;
+  // 找出缺的
+  if(!allNine){ var missing=expectTypes.filter(function(tp){return t8Types.indexOf(tp)<0;}); console.log('    缺失类型: '+missing.join(',')); }
+
+  // T8-2: 严重度排序 high>medium>low
+  var sevOrder={high:0,medium:1,low:2};
+  var sortedOk=t8Issues.every(function(iss,idx){ return idx===0||sevOrder[iss.severity]>=sevOrder[t8Issues[idx-1].severity]; });
+  _assert('T8-sevSort',sortedOk,'问题按严重度排序 high>medium>low');
+  sortedOk?pass++:fail++;
+
+  // T8-3: 4档档位 getIssueLevel
+  var lvlCases=[
+    {coupling:0,nestingDepth:0,linesOfCode:0,cyclomaticComplexity:0,hasCircularDep:false,hasErrorHandling:true,duplicates:[],isDeadCode:false,globalVars:[],expect:0},
+    {coupling:12,nestingDepth:0,linesOfCode:0,cyclomaticComplexity:0,hasCircularDep:false,hasErrorHandling:true,duplicates:[],isDeadCode:false,globalVars:[],expect:1},
+    {coupling:12,nestingDepth:6,linesOfCode:0,cyclomaticComplexity:0,hasCircularDep:false,hasErrorHandling:true,duplicates:[],isDeadCode:false,globalVars:[],expect:2},
+    {coupling:12,nestingDepth:6,linesOfCode:300,cyclomaticComplexity:15,hasCircularDep:true,hasErrorHandling:false,duplicates:['x'],isDeadCode:true,globalVars:['g'],expect:3}
+  ];
+  lvlCases.forEach(function(c,idx){
+    t8Task.quality=Object.assign({},c);
+    var lvl=getIssueLevel('api');
+    var ok=lvl===c.expect;
+    _assert('T8-lvl-'+idx,ok,'档位测试'+idx+': '+c.expect+'个问题→L'+lvl+(ok?'':' (期望L'+c.expect+')'));
+    ok?pass++:fail++;
+  });
+  _resetAll();
+
   // === 结果 ===
   _resetAll();
   console.log('\n========================================');
@@ -423,30 +572,49 @@ var edges=[
 // ====== 常量 ======
 var SC={done:'#3fb950','in-progress':'#58a6ff',todo:'#6e7681',blocked:'#f85149',waiting:'#bc8cff'};
 // ====== 代码探伤仪：质量颜色体系 (v1.9) ======
+// v1.9.6: 9种问题类型统一图标/标签/修复建议 (业界最全)
 var QC={
-  highCoupling:{color:'#f85149',border:'#ff7b72',label:'高耦合'},       // 红色
-  deepNesting:{color:'#d29922',border:'#e3b341',label:'深嵌套'},         // 橙色/金色
-  circularDep:{color:'#a371f7',border:'#bc8cff',label:'循环依赖'},        // 紫色
-  deadCode:{color:'#6e7681',border:'#8b949e',label:'死代码'},            // 灰色
-  largeFunc:{color:'#d29922',border:'#f0883e',label:'超大函数'},          // 黄橙色
-  noErrorHandling:{color:'#f85149',border:'#ff7b72',label:'缺错误处理'}   // 红色
+  highCoupling:{color:'#f85149',border:'#ff7b72',icon:'🔗',label:{zh:'高耦合',en:'High Coupling'},tip:{zh:'拆分模块，降低耦合度',en:'Split modules'}},
+  highComplexity:{color:'#f85149',border:'#ff7b72',icon:'🌀',label:{zh:'高圈复杂度',en:'High Complexity'},tip:{zh:'提取分支，简化逻辑',en:'Extract branches'}},
+  circularDep:{color:'#bc8cff',border:'#d2a8ff',icon:'♻️',label:{zh:'循环依赖',en:'Circular Dep'},tip:{zh:'引入中间层解耦',en:'Decouple via layer'}},
+  largeFunc:{color:'#f0883e',border:'#db6d28',icon:'📐',label:{zh:'超大函数',en:'Large Function'},tip:{zh:'拆分为小函数',en:'Split into small functions'}},
+  deepNesting:{color:'#d29922',border:'#e3b341',icon:'🪆',label:{zh:'深嵌套',en:'Deep Nesting'},tip:{zh:'提取函数，扁平化',en:'Extract functions'}},
+  noErrorHandling:{color:'#f0883e',border:'#db6d28',icon:'🛡️',label:{zh:'缺错误处理',en:'No Error Handling'},tip:{zh:'添加 try-catch',en:'Add try-catch'}},
+  duplicateCode:{color:'#d29922',border:'#e3b341',icon:'⧉',label:{zh:'重复代码',en:'Duplicate Code'},tip:{zh:'抽取公共方法',en:'Extract common method'}},
+  deadCode:{color:'#6e7681',border:'#8b949e',icon:'💀',label:{zh:'死代码',en:'Dead Code'},tip:{zh:'删除未引用代码',en:'Remove unused code'}},
+  globalVars:{color:'#6e7681',border:'#8b949e',icon:'🔣',label:{zh:'全局变量',en:'Global Vars'},tip:{zh:'改为局部或模块作用域',en:'Use local/module scope'}}
 };
-// 获取节点最严重的质量问题
+// 9种问题严重度分级（用于全局统计 & 渐变档位）
+var QSEV={highCoupling:'high',highComplexity:'high',circularDep:'high',largeFunc:'medium',deepNesting:'medium',noErrorHandling:'medium',duplicateCode:'medium',deadCode:'low',globalVars:'low'};
 // 获取节点所有质量问题（按严重程度排序，返回数组）
 function getQualityIssues(nodeId){
   var task=taskById(nodeId);
   if(!task||!task.quality) return [];
   var q=task.quality, issues=[];
-  if(q.hasCircularDep) issues.push({type:'circularDep',severity:'high',detail:'检测到循环依赖'});
-  if(q.coupling>8) issues.push({type:'highCoupling',severity:'high',detail:'耦合度 '+q.coupling+' (>8)'});
-  if(q.linesOfCode>200) issues.push({type:'largeFunc',severity:'medium',detail:q.linesOfCode+' 行 (>200)'});
-  if(q.nestingDepth>4) issues.push({type:'deepNesting',severity:'medium',detail:'嵌套深度 '+q.nestingDepth+' (>4)'});
-  if(q.isDeadCode) issues.push({type:'deadCode',severity:'low',detail:'不可达代码'});
-  if(!q.hasErrorHandling) issues.push({type:'noErrorHandling',severity:'medium',detail:'缺少 try-catch'});
+  // high
+  if(q.hasCircularDep) issues.push({type:'circularDep',severity:'high',detail:q.duplicates&&q.duplicates.length?'循环依赖':'检测到循环依赖',value:q.duplicates?''+q.duplicates.length:''});
+  if(q.coupling>8) issues.push({type:'highCoupling',severity:'high',detail:'耦合度 '+q.coupling,value:''+q.coupling});
+  if(q.cyclomaticComplexity>10) issues.push({type:'highComplexity',severity:'high',detail:'圈复杂度 '+q.cyclomaticComplexity,value:''+q.cyclomaticComplexity});
+  // medium
+  if(q.linesOfCode>200) issues.push({type:'largeFunc',severity:'medium',detail:q.linesOfCode+' 行',value:''+q.linesOfCode});
+  if(q.nestingDepth>4) issues.push({type:'deepNesting',severity:'medium',detail:'嵌套深度 '+q.nestingDepth,value:''+q.nestingDepth});
+  if(!q.hasErrorHandling) issues.push({type:'noErrorHandling',severity:'medium',detail:'缺少 try-catch',value:''});
+  if(q.duplicates&&q.duplicates.length>0) issues.push({type:'duplicateCode',severity:'medium',detail:q.duplicates.length+' 处重复',value:q.duplicates.join(',')});
+  // low
+  if(q.isDeadCode) issues.push({type:'deadCode',severity:'low',detail:'不可达代码',value:''});
+  if(q.globalVars&&q.globalVars.length>0) issues.push({type:'globalVars',severity:'low',detail:q.globalVars.length+' 个全局变量',value:q.globalVars.join(',')});
   // 严重程度排序：high > medium > low
   var sevOrder={high:0,medium:1,low:2};
   issues.sort(function(a,b){ return sevOrder[a.severity]-sevOrder[b.severity]; });
   return issues;
+}
+// v1.9.6: 问题数→红色渐变档位 (0/1/2-3/4+)，探伤模式专用
+function getIssueLevel(nodeId){
+  var n=getQualityIssues(nodeId).length;
+  if(n===0) return 0;
+  if(n===1) return 1;
+  if(n<=3) return 2;
+  return 3;
 }
 // 获取最严重的一个问题（兼容旧调用）
 function getWorstQualityIssue(nodeId){
@@ -455,13 +623,16 @@ function getWorstQualityIssue(nodeId){
 }
 // 演示质量数据注入（PS1→PS2 时调用）
 var demoQualityBackup={};
+var demoStatusBackup={}; // 备份原始 status + error，PS5 重置时恢复
 function injectDemoIssues(){
   demoQualityBackup={};
+  demoStatusBackup={};
   var issueTypes=['highCoupling','deepNesting','largeFunc','circularDep','deadCode','noErrorHandling'];
   probeProblemNodes.forEach(function(id){
     var task=taskById(id);
     if(!task) return;
     demoQualityBackup[id]=JSON.parse(JSON.stringify(task.quality||{}));
+    demoStatusBackup[id]={status:task.status,error:task.error?JSON.parse(JSON.stringify(task.error)):null};
     if(!task.quality) task.quality={};
     var q=task.quality;
     var num=1+Math.floor(Math.random()*3);
@@ -474,6 +645,12 @@ function injectDemoIssues(){
       if(type==='deadCode') q.isDeadCode=true;
       if(type==='noErrorHandling') q.hasErrorHandling=false;
     }
+    // PS2：让问题节点视觉变红（blocked + error → 红色脉冲光环 + 传导阻塞）
+    // v1.9.5: 使用故障类型体系
+    var types=Object.keys(FAULT_TYPES);
+    var ft=FAULT_TYPES[types[Math.floor(Math.random()*types.length)]];
+    task.status='blocked';
+    task.error={message:{zh:ft.zh,en:ft.en},type:types[Math.floor(Math.random()*types.length)],file:task.file||'',line:Math.floor(Math.random()*50)+1,callChain:[]};
   });
   console.log('[Fusang Probe] 已注入质量数据:',probeProblemNodes);
 }
@@ -482,8 +659,14 @@ function resetDemoQuality(){
     var task=taskById(id);
     if(!task) return;
     task.quality=demoQualityBackup[id];
+    // 恢复原始 status + error（PS5 重置时）
+    if(demoStatusBackup[id]){
+      task.status=demoStatusBackup[id].status||'waiting';
+      task.error=demoStatusBackup[id].error;
+    }
   });
   demoQualityBackup={};
+  demoStatusBackup={};
   console.log('[Fusang Probe] 已重置质量数据');
 }
 // 计算质量评分 (0-100)
@@ -500,10 +683,11 @@ function getQualityScore(nodeId){
   return Math.max(0,Math.round(score));
 }
 // SL removed - unused, status labels now in i18n
-var APP_VERSION='v1.9.1'; // 随系统升级手动更新 | 代码探伤仪MVP - 修复goal节点emoji渲染异常
+var APP_VERSION='v1.9.3'; // 探伤模式 UI 审查：滚轮缩放 + 右键拖动 + 双击重置 + Esc 退出 + real 模式拦截 + 光圈跟随修复 + 边界对称公式
 document.title='AI\u2014FUSANG '+APP_VERSION;
 var NW=120,NH=40,PAD_X=120,PAD_TOP=50,LGAP=82,PED_H=65;
 var treeScale=0.95, treeOffsetX=0, treeOffsetY=0; // 树整体缩放和偏移（打包用）
+var userZoomed=false; // v1.9.3：用户是否滚轮缩放过。一旦调整过，draw() 不再强制重置 treeOffsetY
 
 // ====== postMessage Config (V4) ======
 var urlParams=new URLSearchParams(window.location.search);
@@ -514,6 +698,110 @@ var pendingAcks={}; // messageId → timeout
 // ====== Canvas 初始化 ======
 var cv=document.getElementById('c');
 var ctx=cv.getContext('2d');
+
+// ====== 滚轮缩放（v1.9.3 CAD 风格） ======
+// 仿射变换（affine transform）：以鼠标为中心缩放
+// 范围 0.3 ~ 2.5（保守）；边界保护：缩放后树至少有 30% 留在视野内
+// 适用：搭建模式 + 探伤模式（同一 canvas，无需模式判断）
+// 副作用：首次缩放后置 userZoomed=true，draw() 不再强制重置 treeOffsetY
+cv.addEventListener('wheel', function(e){
+  if(currentMode==='real') return;
+  e.preventDefault(); // 阻止页面滚动
+  if(!W||!H) return; // 守护：resize() 未初始化时跳过
+  // 1. 缩放因子：上滚放大（1.1），下滚缩小（0.9）
+  var factor = e.deltaY < 0 ? 1.1 : 0.9;
+  var newScale = treeScale * factor;
+  // 2. 范围限制 0.3 ~ 2.5
+  if(newScale < 0.3) newScale = 0.3;
+  if(newScale > 2.5) newScale = 2.5;
+  // 3. 中心点：固定画布几何中心（用户反馈"鼠标无法定位"→ 不要鼠标锚点，永远画布中心）
+  //    优势：缩放行为稳定可预测，不会因鼠标位置不同导致树乱飞
+  var mx = W / 2, my = H / 2;
+  // 4. 仿射变换核心：保持鼠标指向的逻辑点位置不变
+  //    公式：lx = (mx - offsetX) / scale  →  newOffsetX = mx - lx * newScale
+  var lx = (mx - treeOffsetX) / treeScale;
+  var ly = (my - treeOffsetY) / treeScale;
+  var newOffsetX = mx - lx * newScale;
+  var newOffsetY = my - ly * newScale;
+  // 5. 边界保护：树至少 30% 留在视野内
+  // v1.9.3 修复：边界改为对称（min/max 都允许负和正），与右键拖动保持一致
+  var treeW = W * newScale, treeH = H * newScale;
+  var visMin = 0.3; // 至少保留 30% 在视野
+  if(treeW <= W * visMin){
+    // 树比可见范围还小，强制居中（不会"丢"）
+    newOffsetX = (W - treeW) / 2;
+  } else {
+    // 树比可见范围大：限制 offsetX 让树至少露 30%
+    var minOffsetX = W * visMin - treeW;
+    var maxOffsetX = W * (1 - visMin);
+    if(newOffsetX < minOffsetX) newOffsetX = minOffsetX;
+    if(newOffsetX > maxOffsetX) newOffsetX = maxOffsetX;
+  }
+  if(treeH <= H * visMin){
+    newOffsetY = (H - treeH) / 2;
+  } else {
+    var minOffsetY = H * visMin - treeH;
+    var maxOffsetY = H * (1 - visMin);
+    if(newOffsetY < minOffsetY) newOffsetY = minOffsetY;
+    if(newOffsetY > maxOffsetY) newOffsetY = maxOffsetY;
+  }
+  // 6. 提交修改
+  treeScale = newScale;
+  treeOffsetX = newOffsetX;
+  treeOffsetY = newOffsetY;
+  userZoomed = true; // 解锁 draw() 强制重置
+}, {passive: false});
+
+// ====== 右键拖拽平移（v1.9.3） ======
+// 右键按住拖动，实时更新 treeOffsetX/Y（用户反馈"避免按键交叉污染"→ 改用右键）
+// 硬边界：拖动中实时限制，树至少 30% 在屏幕内（与滚轮缩放同款保护）
+// 不影响左键 click（节点点击/按钮）和滚轮缩放
+var isPanning=false;
+var panStart={x:0,y:0,offX:0,offY:0};
+cv.addEventListener('mousedown',function(e){
+  // ★ 接入模式：只观察不可交互
+  if(currentMode==='real') return;
+  if(e.button!==2) return; // 只响应右键
+  e.preventDefault();
+  isPanning=true;
+  panStart.x=e.clientX; panStart.y=e.clientY;
+  panStart.offX=treeOffsetX; panStart.offY=treeOffsetY;
+  userZoomed=true; // 解锁 draw() 强制重置
+  cv.style.cursor='grabbing';
+});
+window.addEventListener('mousemove',function(e){
+  if(!isPanning) return;
+  var dx=e.clientX-panStart.x, dy=e.clientY-panStart.y;
+  var newX=panStart.offX+dx, newY=panStart.offY+dy;
+  // 硬边界（与滚轮同款算法）—— v1.9.3 修复：边界改为对称（min/max 都允许负和正）
+  // 旧公式 max=0 写死，导致用户想往下拖（treeOffsetY 增大露出顶部）被卡住
+  var treeW=W*treeScale, treeH=H*treeScale, visMin=0.3;
+  if(treeW<=W*visMin){
+    newX=(W-treeW)/2;
+  } else {
+    var minX=W*visMin-treeW, maxX=W*(1-visMin);
+    if(newX<minX) newX=minX;
+    if(newX>maxX) newX=maxX;
+  }
+  if(treeH<=H*visMin){
+    newY=(H-treeH)/2;
+  } else {
+    var minY=H*visMin-treeH, maxY=H*(1-visMin);
+    if(newY<minY) newY=minY;
+    if(newY>maxY) newY=maxY;
+  }
+  treeOffsetX=newX; treeOffsetY=newY;
+});
+window.addEventListener('mouseup',function(e){
+  // ★ 接入模式：只观察不可交互
+  if(currentMode==='real') return;
+  if(e.button!==2) return;
+  if(!isPanning) return;
+  isPanning=false;
+  cv.style.cursor='default';
+});
+// 阻止画布上所有右键菜单（避免与拖拽冲突）
+cv.addEventListener('contextmenu',function(e){e.preventDefault();});
 
 var W,H,layoutNodes=[],hoveredNode=null,selectedNode=null;
 var rootsExpanded=false,legendExpanded=false;
@@ -555,13 +843,7 @@ function hideProbeHTML(){
 function exitProbeMode(needSetMode){
   console.warn('[Fusang] exitProbeMode() is deprecated, use setScene("none") directly');
 }
-function skipProbeDemo(){
-  probeDemoState=4;
-  probeStartTime=performance.now();
-  probeDemoTime=0;
-  var skipBtn=document.getElementById('btn-probe-skip');
-  if(skipBtn) skipBtn.style.display='none';
-}
+// v1.9.2: skipProbeDemo 已删除——上传真实代码时演示自然停止，无需单独跳过
 function startProbeScan(){
   if(probeUploadedFiles.length===0){
     alert(lang==='zh'?'请先上传代码':'Please upload code first');
@@ -627,44 +909,95 @@ function updateProbeHTML(){
   } else {
     if(progress) progress.style.display='none';
   }
+  // ★ 工业化面板：信号灯 + 数据行 + 按钮
+  var dot=document.getElementById('probe-fab-dot');
+  var label=document.getElementById('probe-fab-label');
+  var rows=document.getElementById('probe-fab-rows');
+  var btns=document.getElementById('probe-fab-btns');
+  if(!dot||!label||!rows||!btns) return;
+
+  // 辅助：构建数据行 HTML（v1.9.3 工业级：边框改#2a2a4a，标签改#4a4a6a）
+  function mkRow(key,val,color){
+    var vc=color?' style="color:'+color+';font-family:JetBrains Mono,monospace;font-size:10px;font-variant-numeric:tabular-nums;"':' style="color:#8b949e;font-family:JetBrains Mono,monospace;font-size:10px;font-variant-numeric:tabular-nums;"';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid rgba(42,42,74,0.4);"><span style="color:#4a4a6a;text-transform:uppercase;letter-spacing:1px;font-size:8px;font-weight:500;">'+key+'</span><span'+vc+'>'+val+'</span></div>';
+  }
+  // 辅助：构建按钮 HTML（v1.9.3 工业级：去圆角，加顶部微高光）
+  function mkBtn(text,bg,color,onclick){
+    var brd=bg==='transparent'?'border-top:1px solid rgba(42,42,74,0.5);':'border-top:1px solid rgba(255,255,255,0.04);';
+    return '<button onclick="'+onclick+'" style="width:100%;border:none;border-radius:0;padding:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:0.5px;'+brd+'background:'+bg+';color:'+color+';" onmouseover="this.style.opacity=0.9" onmouseout="this.style.opacity=1">'+text+'</button>';
+  }
+
+  // ★ 中英文字典（v1.9.2，走 i18n）
+  var L={
+    PROBE:i18n[lang].probeFabProbe,
+    LOADED:i18n[lang].probeFabLoaded,
+    SCANNING:i18n[lang].probeFabScanning,
+    UPLOAD:i18n[lang].probeFabUpload,
+    SCAN:i18n[lang].probeFabScan,
+    RE_UPLOAD:i18n[lang].probeFabReUpload,
+    FILES:i18n[lang].probeFabFiles,
+    PROGRESS:i18n[lang].probeFabProgress,
+    ISSUES:i18n[lang].probeFabIssues,
+    SCORE:i18n[lang].probeFabScore
+  };
+
+  if(probeState==='A'){
+    // 状态A：没接水 — 灰灯 + 上传按钮
+    dot.style.background='#484f58'; dot.style.boxShadow='none'; dot.style.animation='none';
+    label.style.color='#484f58'; label.textContent=L.PROBE;
+    rows.innerHTML='';
+    btns.innerHTML=mkBtn(L.UPLOAD,'#238636','#fff',"document.getElementById('probe-file-input').click()");
+  } else if(probeState==='B'){
+    // 状态B：有水没开龙头 — 橙灯 + 文件数 + 扫描 + 重新上传
+    dot.style.background='#d29922'; dot.style.boxShadow='0 0 6px rgba(210,153,34,0.5)'; dot.style.animation='none';
+    label.style.color='#d29922'; label.textContent=L.LOADED;
+    rows.innerHTML=mkRow(L.FILES,probeUploadedFiles.length,'#58a6ff');
+    btns.innerHTML=mkBtn(L.SCAN,'#58a6ff','#000','startProbeScan()')
+      +mkBtn(L.RE_UPLOAD,'transparent','#8b949e',"document.getElementById('probe-file-input').click()");
+  } else if(probeState==='C'){
+    // 状态C：有水开龙头 — 蓝灯闪烁 + 实时数据 + 无按钮
+    dot.style.background='#58a6ff'; dot.style.boxShadow='0 0 6px rgba(88,166,255,0.5)'; dot.style.animation='blink 0.8s infinite';
+    label.style.color='#58a6ff'; label.textContent=L.SCANNING;
+    var issueCount=probeProblemNodes.length;
+    var hp=100;
+    if(probeScanned) hp=issueCount>0?60:100;
+    if(probeDemoState===5) hp=100;
+    rows.innerHTML=mkRow(L.FILES,probeUploadedFiles.length,'#8b949e')
+      +mkRow(L.PROGRESS,Math.round(probeScanProgress)+'%','#58a6ff')
+      +mkRow(L.ISSUES,issueCount,issueCount>0?'#f85149':'#3fb950')
+      +mkRow(L.SCORE,hp+'/100',hp>=80?'#3fb950':hp>=60?'#d29922':'#f85149');
+    btns.innerHTML='';
+  } else if(probeState==='D'){
+    // 状态D：调试模式 — 黄灯 + 下拉选节点 + 4按钮
+    dot.style.background='#d29922'; dot.style.boxShadow='0 0 6px rgba(210,153,34,0.5)'; dot.style.animation='none';
+    label.style.color='#d29922'; label.textContent=lang==='zh'?'DEBUG':'DEBUG';
+    rows.innerHTML=mkRow('NODE','','#8b949e');
+    btns.innerHTML='<div style="padding:4px 10px;"><select id="probe-debug-select" style="width:100%;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;border-radius:3px;padding:4px;font-size:10px;font-family:inherit;">'
+      +'<option value="">'+i18n[lang].liveNode+'</option>'
+      +tasks.filter(function(t){return t.id!=='goal';}).map(function(t){return '<option value="'+t.id+'">'+t.id+'</option>';}).join('')+
+      '</select></div>'
+      +mkBtn('⚡ '+i18n[lang].infoCard.injectFault,'#f85149','#fff','probeDebugInject()')
+      +mkBtn('🤖 AI '+i18n[lang].infoCard.aiFix,'#58a6ff','#fff','probeDebugAiFix()')
+      +mkBtn('✋ '+i18n[lang].infoCard.manualFix,'#f5a623','#fff','probeDebugManualFix()')
+      +mkBtn('🔦 '+i18n[lang].infoCard.highlight||'高亮','#a371f7','#fff','probeDebugHighlight()');
+  }
+
+  // ★ 顶部状态栏同步（v1.9.2 走 i18n）
   var statusText=document.getElementById('probe-status-text');
   if(statusText){
     if(probeDemoState===-1){
-      // 演示已停止，根据 probeState 显示
-      statusText.textContent=probeState==='A'?(lang==='zh'?'准备中':'Ready'):(lang==='zh'?'待扫描':'Ready');
-    } else if(probeDemoState===0) statusText.textContent=lang==='zh'?'准备中':'Ready';
-    else if(probeDemoState===1) statusText.textContent=lang==='zh'?'扫描中...':'Scanning...';
-    else if(probeDemoState===2) statusText.textContent='⚠ '+probeProblemNodes.length+' issues';
-    else if(probeDemoState===3) statusText.textContent=lang==='zh'?'定位...':'Locating';
-    else if(probeDemoState===4) statusText.textContent=lang==='zh'?'修复中...':'Fixing...';
-    else if(probeDemoState===5) statusText.textContent=lang==='zh'?'✅ 完成':'✅ Done';
-  }
-  var fabTitle=document.getElementById('probe-fab-title');
-  var fabBody=document.getElementById('probe-fab-body');
-  var btnUpload=document.getElementById('btn-probe-upload');
-  var btnScan=document.getElementById('btn-probe-scan');
-  if(fabTitle&&fabBody){
-    if(probeState==='A'){
-      fabTitle.textContent=lang==='zh'?'🔬 代码探伤':'🔬 PROBE';
-      fabBody.innerHTML=lang==='zh'?'上传 JS/TS 文件夹<br>（.js / .ts / .jsx / .tsx）':'Upload folder<br>(.js/.ts/.jsx/.tsx)';
-      if(btnUpload) btnUpload.style.display='block';
-      if(btnScan) btnScan.style.display='none';
-    } else if(probeState==='B'){
-      fabTitle.textContent=lang==='zh'?'✅ 已接入':'✅ LOADED';
-      fabBody.innerHTML=lang==='zh'?'已接入 <b>'+probeUploadedFiles.length+'</b> 个文件':'<b>'+probeUploadedFiles.length+'</b> files loaded';
-      if(btnUpload) btnUpload.style.display='block';
-      if(btnScan) btnScan.style.display='block';
-    } else if(probeState==='C'){
-      fabTitle.textContent=lang==='zh'?'🔍 扫描中':'🔍 SCANNING';
-      fabBody.innerHTML=lang==='zh'?'分析 '+probeUploadedFiles.length+' 个文件...':'Analyzing '+probeUploadedFiles.length+' files...';
-      if(btnUpload) btnUpload.style.display='none';
-      if(btnScan) btnScan.style.display='none';
-    }
+      statusText.textContent=probeState==='A'?i18n[lang].probeStatusReady:(lang==='zh'?'待扫描':'Ready to scan');
+    } else if(probeDemoState===0) statusText.textContent=i18n[lang].probeStatusReady;
+    else if(probeDemoState===1) statusText.textContent=i18n[lang].probeStatusScanning;
+    else if(probeDemoState===2) statusText.textContent=lang==='zh'?'⚠ 发现 '+probeProblemNodes.length+' 个问题':'⚠ '+probeProblemNodes.length+' issues found';
+    else if(probeDemoState===3) statusText.textContent=i18n[lang].probeStatusLocating;
+    else if(probeDemoState===4) statusText.textContent=i18n[lang].probeStatusFixing;
+    else if(probeDemoState===5) statusText.textContent=i18n[lang].probeStatusDone;
   }
   var healthEl=document.getElementById('probe-health');
   if(healthEl){
-    var hp=100; // 默认满分
-    if(probeDemoState===-1 && probeState==='B') hp=100; // 已上传，待扫描
+    var hp=100;
+    if(probeDemoState===-1 && probeState==='B') hp=100;
     else if(probeScanned) hp=probeProblemNodes.length>0?60:100;
     if(probeDemoState===5) hp=100;
     healthEl.textContent=hp+'/100';
@@ -705,7 +1038,21 @@ function setLang(l){
   // 更新调试控制台标签
   var debugLabel=document.getElementById('debug-console-label');
   if(debugLabel) debugLabel.textContent=i18n[l].debugConsole;
+  // ★ 更新探伤右上角按钮文本（v1.9.2）
+  var probeBtnMap=[
+    ['btn-scene-build','probeBtnBuild'],['btn-scene-probe','probeBtnProbe'],
+    ['btn-build-switch','probeBtnBuild'],
+    ['btn-probe-switch','probeBtnProbe'],
+    ['btn-probe-demo','probeBtnDemo'],['btn-probe-debug','probeBtnDebug'],['btn-probe-upload','probeBtnUpload']
+  ];
+  probeBtnMap.forEach(function(pair){
+    var btn=document.getElementById(pair[0]);
+    if(btn) btn.textContent=i18n[l][pair[1]];
+  });
+  // 更新接入面板
   applyLiveLang();
+  // ★ 更新探伤面板（强制刷新 updateProbeHTML）
+  if(typeof updateProbeHTML==='function') updateProbeHTML();
 }
 function updateLangButtons(){
   var bZh=document.getElementById('btn-zh'), bEn=document.getElementById('btn-en');
@@ -759,7 +1106,7 @@ var probeStartTime=0;           // 探伤演示开始时间
 var probeDemoTime=0;            // 当前状态已用时间
 var probeScanProgress=0;        // 扫描进度 (0-100)
 var probeProblemNodes=[];       // 演示用"问题节点"列表
-var probeSkipRequested=false;   // 用户请求跳过演示
+// v1.9.2: probeSkipRequested 已删除——上传=最高优先权，无需单独跳过
 // 探伤模式业务状态（水龙头逻辑）
 var probeUploadedFiles=[];      // 用户上传的文件列表
 var probeScanned=false;         // 是否已完成扫描
@@ -853,7 +1200,32 @@ var i18n={
     // 状态栏
     liveLabelSignal:'信号',
     liveLabelExternal:'模拟',
-    liveLabelConnected:'连接'
+    liveLabelConnected:'连接',
+    // 探伤面板（v1.9.2）
+    probeFabProbe:'探伤',
+    probeFabLoaded:'已接入',
+    probeFabScanning:'扫描中',
+    probeFabUpload:'📂 上传',
+    probeFabScan:'🔍 扫描',
+    probeFabReUpload:'📂 重新上传',
+    probeFabFiles:'文件数',
+    probeFabProgress:'进度',
+    probeFabIssues:'问题',
+    probeFabScore:'评分',
+    // 探伤顶部状态栏
+    probeStatusReady:'准备中',
+    probeStatusScanning:'扫描中...',
+    probeStatusIssue:'⚠ 发现 '+0+' 个问题',
+    probeStatusLocating:'定位...',
+    probeStatusFixing:'修复中...',
+    probeStatusDone:'✅ 完成',
+    probeHealthLabel:'HEALTH',
+    // 探伤右上角按钮
+    probeBtnBuild:'🔨 搭建',
+    probeBtnProbe:'🔬 探伤',
+    probeBtnDemo:'🎬 演示',
+    probeBtnDebug:'🎮 调试',
+    probeBtnUpload:'📂 上传'
   },
   en:{
     title:'Mysterious Eastern World Tree',
@@ -939,7 +1311,32 @@ var i18n={
     // Status bar
     liveLabelSignal:'Signal',
     liveLabelExternal:'Sim',
-    liveLabelConnected:'Link'
+    liveLabelConnected:'Link',
+    // Probe panel (v1.9.2)
+    probeFabProbe:'PROBE',
+    probeFabLoaded:'LOADED',
+    probeFabScanning:'SCANNING',
+    probeFabUpload:'📂 UPLOAD',
+    probeFabScan:'🔍 SCAN',
+    probeFabReUpload:'📂 RE-UPLOAD',
+    probeFabFiles:'FILES',
+    probeFabProgress:'PROGRESS',
+    probeFabIssues:'ISSUES',
+    probeFabScore:'SCORE',
+    // Probe topbar
+    probeStatusReady:'Ready',
+    probeStatusScanning:'Scanning...',
+    probeStatusIssue:'⚠ '+0+' issues found',
+    probeStatusLocating:'Locating',
+    probeStatusFixing:'Fixing...',
+    probeStatusDone:'✅ Done',
+    probeHealthLabel:'HEALTH',
+    // Probe top-bar buttons
+    probeBtnBuild:'🔨 Build',
+    probeBtnProbe:'🔬 Probe',
+    probeBtnDemo:'🎬 Demo',
+    probeBtnDebug:'🎮 Debug',
+    probeBtnUpload:'📂 Upload'
   }
 };
 
@@ -957,6 +1354,17 @@ document.title=i18n[lang].versionTitle;
   });
   var debugLabel=document.getElementById('debug-console-label');
   if(debugLabel) debugLabel.textContent=i18n[lang].debugConsole;
+  // ★ 探伤按钮初始化（v1.9.2）
+  var probeBtnMap=[
+    ['btn-scene-build','probeBtnBuild'],['btn-scene-probe','probeBtnProbe'],
+    ['btn-build-switch','probeBtnBuild'],
+    ['btn-probe-switch','probeBtnProbe'],
+    ['btn-probe-demo','probeBtnDemo'],['btn-probe-debug','probeBtnDebug'],['btn-probe-upload','probeBtnUpload']
+  ];
+  probeBtnMap.forEach(function(pair){
+    var btn=document.getElementById(pair[0]);
+    if(btn) btn.textContent=i18n[lang][pair[1]];
+  });
   applyLiveLang();
 })();
 
@@ -1119,10 +1527,25 @@ function draw(timestamp){
   try{
   // 动态计算 treeOffsetY：让底座底部碰到🐛按钮顶部
   // 公式推导：缩放后底座底部 = treeOffsetY + H * treeScale → 目标 = H - 36
-  treeOffsetY = H * (1 - treeScale) - 8;
+  // v1.9.3：仅未滚轮缩放时强制重置（保持默认底座贴底），用户调整后保留其值
+  if(!userZoomed) treeOffsetY = H * (1 - treeScale) - 8;
   // 探伤演示状态机推进（用 now 真实时间戳，不用 probeStartTime）
   if(currentMode==='probe' && probeDemoState>=0 && probeDemoState<6){
     probeDemoTime=now-probeStartTime;
+
+    // ★ PS3 持续期：逐个聚焦节点（治本：之前这段无视觉反馈→用户感觉卡住）
+    if(probeDemoState===3 && probeProblemNodes.length>0){
+      var _idx=Math.min(Math.floor(probeDemoTime/1500), probeProblemNodes.length-1);
+      var _nid=probeProblemNodes[_idx];
+      if(_nid){
+        var _expectedStart=probeStartTime+_idx*1500;
+        if(Math.abs(highlightNodeStart-_expectedStart)>100){
+          highlightNodeId=_nid;
+          highlightNodeStart=_expectedStart;
+        }
+      }
+    }
+
     if(probeDemoState===0 && probeDemoTime>1500){
       probeDemoState=1;probeStartTime=now;
       var allIds=tasks.map(function(t){return t.id;});
@@ -1144,6 +1567,14 @@ function draw(timestamp){
       probeDemoState=3;probeStartTime=now;
     } else if(probeDemoState===3 && probeDemoTime>Math.max(probeProblemNodes.length,1)*1500){
       probeDemoState=4;probeStartTime=now;
+      // PS4：修复完成，问题节点变绿（done）+ 清除error+quality + 传导修复
+      // 带AI修复动画效果（v1.9.5）
+      // v1.9.6: 修复时同步清quality，避免4档红色渐变残留（修复→done但quality还在→还显示红）
+      probeProblemNodes.forEach(function(id){
+        var t=taskById(id); if(t){t.status='done';t.error=null;t.quality={coupling:0,nestingDepth:0,linesOfCode:0,cyclomaticComplexity:0,hasCircularDep:false,isDeadCode:false,duplicates:[],globalVars:[],hasErrorHandling:true};}
+        startFixAnimation(id,'ai'); // AI自动修复动画
+      });
+      recalcAll(); // 传导修复：上游修好→下游自动变done
     } else if(probeDemoState===4 && probeDemoTime>Math.max(probeProblemNodes.length,1)*800){
       probeDemoState=5;probeStartTime=now;
     } else if(probeDemoState===5 && probeDemoTime>2500){
@@ -1202,7 +1633,7 @@ function draw(timestamp){
           // 点亮故障节点本身 + 注入红色
           demoLitSet[executionOrder[faultAt]]=true;
           var ft=taskById(executionOrder[faultAt]);
-          if(ft){ft.status='blocked';ft.error={message:{zh:'演示故障',en:'Demo fault'},file:'',line:1,callChain:[]};recalcAll();}
+          if(ft){injectFault(executionOrder[faultAt]);recalcAll();}
           lightIndex=faultAt;
           faultTriggered=true;
           fixStartTime=now; // 记录故障注入时间
@@ -1252,7 +1683,7 @@ function draw(timestamp){
           if(candidates.length===0) break;
           var idx=Math.floor(Math.random()*candidates.length);
           var t=candidates[idx];
-          t.status='blocked';t.error={message:{zh:'运行时故障',en:'Runtime fault'},file:'',line:1,callChain:[]};
+          injectFault(t.id); // v1.9.5: 使用故障类型体系，随机类型
           repairQueue.push(t.id);
         }
       }
@@ -1329,48 +1760,7 @@ function draw(timestamp){
     }
   }
 
-  // ====== 探伤模式提示文案（轻量级，不动画布）======
-  // v1.9 MVP: 探伤模式只显示浮动 UI，画布本身完全不动
-  // 节点点击后由 drawInfoCard 显示质量信息
-  if(currentMode==='probe'){
-    // 仅在 demo 播放中，递增 probeDemoTime 用于浮动 UI 动画
-    if(probeDemoState>=0 && probeDemoState<6){
-      probeDemoTime=now-probeStartTime;
-      // 状态自动推进
-      if(probeDemoState===0 && probeDemoTime>1500){
-        probeDemoState=1;probeStartTime=now;
-        // 随机选 2-8 个节点作为演示用"问题节点"
-        var allIds=tasks.map(function(t){return t.id;});
-        var cnt=2+Math.floor(Math.random()*7);
-        for(var k=allIds.length-1;k>0;k--){
-          var r=Math.floor(Math.random()*(k+1));
-          var tmp2=allIds[k];allIds[k]=allIds[r];allIds[r]=tmp2;
-        }
-        probeProblemNodes=allIds.slice(0,cnt);
-        console.log('[Fusang Probe] 演示问题节点:',probeProblemNodes);
-      } else if(probeDemoState===1 && probeDemoTime>3000){
-        probeDemoState=2;probeStartTime=now;
-        // PS2：问题节点变红
-        probeProblemNodes.forEach(function(id){
-          var t=taskById(id); if(t) t.status='blocked';
-        });
-      } else if(probeDemoState===2 && probeDemoTime>4000){
-        probeDemoState=3;probeStartTime=now;
-      } else if(probeDemoState===3 && probeDemoTime>probeProblemNodes.length*1500){
-        probeDemoState=4;probeStartTime=now;
-        // PS4：开始修复，节点逐个变绿
-        probeProblemNodes.forEach(function(id){
-          var t=taskById(id); if(t) t.status='done';
-        });
-      } else if(probeDemoState===4 && probeDemoTime>probeProblemNodes.length*800){
-        probeDemoState=5;probeStartTime=now;
-      } else if(probeDemoState===5 && probeDemoTime>2500){
-        probeDemoState=0;probeStartTime=now;
-        resetDemoQuality();
-      }
-    }
-  }
-  // 注：探伤演示状态机已在 draw() 开头用真实时间戳推进，此处保留兼容层
+  // 注：探伤演示状态机已在 draw() 开头（L1124）用真实时间戳推进，旧版兼容层已移除
 
   ctx.clearRect(0,0,W,H);
   ctx.save();
@@ -1417,6 +1807,21 @@ function draw(timestamp){
   // 这里只同步更新画布外的元素
   if(currentMode==='probe'){
     updateProbeHTML();
+    // ★ PS3/PS4 进度文字（在 updateProbeHTML 之后，避免被覆盖）
+    if(probeDemoState===3 && probeProblemNodes.length>0){
+      var __idx=Math.min(Math.floor(probeDemoTime/1500), probeProblemNodes.length-1);
+      var __pt=document.getElementById('probe-status-text');
+      if(__pt) __pt.textContent=i18n[lang].probeStatusLocating+' '+(__idx+1)+'/'+probeProblemNodes.length;
+    } else if(probeDemoState===4 && probeProblemNodes.length>0){
+      var __fidx=Math.min(Math.floor(probeDemoTime/800), probeProblemNodes.length-1);
+      var __fpt=document.getElementById('probe-status-text');
+      if(__fpt) __fpt.textContent=i18n[lang].probeStatusFixing+' '+(__fidx+1)+'/'+probeProblemNodes.length;
+    }
+    // v1.9.6: 全局体检面板节流刷新（每500ms，避免每帧innerHTML重绘卡顿）
+    if(now-(window._ovLastRefresh||0)>500){
+      window._ovLastRefresh=now;
+      if(typeof updateProbeOverview==='function') updateProbeOverview();
+    }
   }
 
   // 7.6 模式实时状态指示器（语言按钮右侧，所有模式显示）
@@ -1454,7 +1859,8 @@ function draw(timestamp){
         ctx.strokeStyle='rgba(212,167,44,'+(0.6*glow)+')';
         ctx.lineWidth=3;
         ctx.beginPath();
-        ctx.arc(node.x,node.y,NH,0,Math.PI*2);
+        // v1.9.3 修复：ctx.restore 之后没有 treeOffset/Scale 变换，必须手动算屏幕坐标
+        ctx.arc(node.x*treeScale+treeOffsetX, node.y*treeScale+treeOffsetY, NH*treeScale, 0, Math.PI*2);
         ctx.stroke();
         ctx.restore();
       }
@@ -1606,7 +2012,7 @@ function drawNodes(){
     }
 
     // 背景
-    ctx.fillStyle=isHover?SC[realStatus]+'55':SC[realStatus]+'38';
+    ctx.fillStyle=isHover?SC[realStatus]+'30':SC[realStatus]+'1F';
     ctx.beginPath();
     ctx.roundRect(x,y,NW,NH,8);
     ctx.fill();
@@ -1618,25 +2024,87 @@ function drawNodes(){
     ctx.stroke();
     ctx.shadowBlur=0; // reset shadow
 
-    // ====== 代码探伤仪：质量问题叠加显示 (v1.9，仅探伤模式) ======
+    // ====== 代码探伤仪：4档红色渐变 (v1.9.6，仅探伤模式，红色优先) ======
+    // L0=0问题(绿,不渲染) / L1=1问题(边框红+轻脉动) / L2=2-3问题(+外光晕) / L3=4+问题(+大光晕+抖动)
     if(currentMode==='probe'){
-      var qIssue=getWorstQualityIssue(n.id);
-      if(qIssue){
-        // 质量问题边框（双色：外圈质量色 + 内圈状态色）
-        ctx.strokeStyle=qIssue.border;
-        ctx.lineWidth=2.5;
+      var qLvl=getIssueLevel(n.id);
+      if(qLvl>0){
+        var qIssues=getQualityIssues(n.id);
+        var sevHighest=qIssues.length>0?qIssues[0].severity:'medium'; // 已按严重度排序
+        // 红色深浅随最高严重度微调：high=纯红, medium=橙红, low=暗红
+        var baseR = sevHighest==='high'?   'rgba(248,81,73,'  // #f85149
+                  : sevHighest==='medium'? 'rgba(248,128,73,' // 橙红
+                  :                          'rgba(200,83,75,';// 暗红
+        var pulse=0.5+0.5*Math.abs(Math.sin(now/420+n.id.charCodeAt(0)%10)); // 0~1 呼吸
+
+        // L3 抖动：4+问题节点轻微抖动，强化"病重"感
+        var shakeX=0, shakeY=0;
+        if(qLvl===3){ shakeX=(Math.random()-0.5)*1.5; shakeY=(Math.random()-0.5)*1.5; }
+        var sx=n.x+shakeX, sy=n.y+shakeY;
+        var bx=x+shakeX, by=y+shakeY;
+
+        // (1) 边框红 — L1/L2/L3 都画，脉动随档位增强
+        ctx.strokeStyle=baseR+(0.55+pulse*0.45)+')';
+        ctx.lineWidth=1.5+qLvl*0.6;          // L1=2.1 L2=2.7 L3=3.3
+        ctx.beginPath();
+        ctx.roundRect(bx,by,NW,NH,8);
         ctx.stroke();
-        // 质量问题脉冲动画（类似阻塞节点闪烁，但用质量色）
-        var qa=0.3+0.4*Math.abs(Math.sin(now/400+n.id.charCodeAt(0)%10));
-        ctx.strokeStyle=qIssue.color+Math.round(qa*255).toString(16).padStart(2,'0');
-        ctx.lineWidth=1.5;
-        ctx.roundRect(x-3,y-3,NW+6,NH+6,10);
-        ctx.stroke();
+
+        // (2) 外光晕 — L2/L3 画（L1 不画，保持轻量）
+        if(qLvl>=2){
+          var haloR=Math.max(NW,NH)/2+6+pulse*(qLvl===3?16:10);
+          var grad=ctx.createRadialGradient(sx,sy,0,sx,sy,haloR+8);
+          grad.addColorStop(0,baseR+'0)');
+          grad.addColorStop(0.4,baseR+(pulse*0.28)+')');
+          grad.addColorStop(0.75,baseR+(pulse*0.08)+')');
+          grad.addColorStop(1,baseR+'0)');
+          ctx.fillStyle=grad;
+          ctx.beginPath();
+          ctx.arc(sx,sy,haloR+8,0,Math.PI*2);
+          ctx.fill();
+          // 外环
+          ctx.strokeStyle=baseR+(pulse*0.4)+')';
+          ctx.lineWidth=1+pulse*0.8;
+          ctx.beginPath();
+          ctx.arc(sx,sy,haloR,0,Math.PI*2);
+          ctx.stroke();
+        }
+
+        // (3) L3 强化：内层再叠一圈亮红描边 + 更强闪烁
+        if(qLvl===3){
+          ctx.strokeStyle='rgba(255,120,110,'+(0.4+pulse*0.4)+')';
+          ctx.lineWidth=1;
+          ctx.beginPath();
+          ctx.roundRect(bx-2,by-2,NW+4,NH+4,10);
+          ctx.stroke();
+        }
+
+        // (4) 右上角数字角标 — 仅 L2/L3 显示（L1=1个问题直接渲染，不加角标）
+        //     L2/L3 必须有角标，因为多个问题靠红层无法区分具体数量
+        if(qLvl>=2){
+          var numX=bx+NW-6, numY=by-2;
+          var badgeR=qLvl===3?11:9;
+          ctx.shadowColor='rgba(248,81,73,0.8)';
+          ctx.shadowBlur=qLvl===3?8:5;
+          ctx.fillStyle='#f85149';
+          ctx.beginPath();
+          ctx.arc(numX-badgeR,numY+badgeR,badgeR,0,Math.PI*2);
+          ctx.fill();
+          ctx.shadowColor='transparent';ctx.shadowBlur=0;
+          ctx.strokeStyle='rgba(255,255,255,0.7)';
+          ctx.lineWidth=1.5;
+          ctx.stroke();
+          ctx.fillStyle='#fff';
+          ctx.font='bold '+(qLvl===3?'13px':'11px')+' sans-serif';
+          ctx.textAlign='center';
+          ctx.textBaseline='middle';
+          ctx.fillText(qIssues.length,numX-badgeR,numY+badgeR);
+        }
       }
     }
 
-    // 阻塞节点：红色边框闪烁
-    if(realStatus==='blocked'){
+    // 阻塞节点：红色边框闪烁（非探伤模式才走这里，探伤模式已由上面4档接管红色）
+    if(realStatus==='blocked'&&currentMode!=='probe'){
       var flashAlpha=0.4+0.6*Math.abs(Math.sin(now/250));
       ctx.strokeStyle='rgba(248,81,73,'+flashAlpha+')';
       ctx.lineWidth=2.5+flashAlpha*2;
@@ -1657,91 +2125,36 @@ function drawNodes(){
     ctx.textBaseline='middle';
     ctx.fillText(n.label[lang],n.x,n.y);
 
-    // 代码探伤仪：质量问题角标 (v1.9，仅探伤模式) — 1个显示图标，2+个显示数字
-    if(currentMode==='probe'){
-      var qIssues=getQualityIssues(n.id);
-      if(qIssues.length===1){
-        // 1个问题：醒目类型图标（加红色底圆）
-        var badgeX=x+NW/2-14,badgeY=y-NH/2+4;
-        // 红色底圆
-        ctx.fillStyle='rgba(248,81,73,0.9)';
-        ctx.beginPath();
-        ctx.arc(badgeX+5,badgeY-2,9,0,Math.PI*2);
-        ctx.fill();
-        // 图标
-        ctx.font='bold 11px sans-serif';
-        var icons={'highCoupling':'🔴','deepNesting':'🟠','circularDep':'🟣','deadCode':'⚪','largeFunc':'🟡','noErrorHandling':'⚡'};
-        ctx.fillText(icons[qIssues[0].type]||'⚠️',badgeX,badgeY);
-      } else if(qIssues.length>=2){
-        // 2+个问题：醒目红色数字角标（加大+发光边框）
-        var numX=x+NW/2-10,numY=y-NH/2;
-        // 外发光
-        ctx.shadowColor='rgba(248,81,73,0.8)';
-        ctx.shadowBlur=6;
-        // 红色底圆
-        ctx.fillStyle='#f85149';
-        ctx.beginPath();
-        ctx.arc(numX+7,numY+7,10,0,Math.PI*2);
-        ctx.fill();
-        // 白色边框
-        ctx.shadowColor='none';
-        ctx.shadowBlur=0;
-        ctx.strokeStyle='rgba(255,255,255,0.6)';
-        ctx.lineWidth=1.5;
-        ctx.stroke();
-        // 白色粗体数字
-        ctx.fillStyle='#fff';
-        ctx.font='bold 12px sans-serif';
-        ctx.textAlign='center';
-        ctx.textBaseline='middle';
-        ctx.fillText(qIssues.length,numX+7,numY+7);
-        // 清除阴影
-        ctx.shadowColor='none';ctx.shadowBlur=0;
-      }
-    }
-
-    // 堵点效果：红色脉冲光环 + 边框闪烁
-    if(realStatus==='blocked'){
+    // 堵点效果：红色脉冲光环 + 边框闪烁（仅非探伤模式；探伤模式已由4档红色接管）
+    if(realStatus==='blocked'&&currentMode!=='probe'){
       var pulsePhase=now/300;
       var pulseAlpha=0.4+0.6*Math.abs(Math.sin(pulsePhase));
       var pulseR=Math.max(NW,NH)/2+10+pulseAlpha*22;
 
       // 大圈红色光晕（呼吸扩散）
-      var grad=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,pulseR+18);
+      var grad=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,pulseR+10);
       grad.addColorStop(0,'rgba(248,81,73,0)');
-      grad.addColorStop(0.35,'rgba(248,81,73,'+(pulseAlpha*0.5)+')');
-      grad.addColorStop(0.7,'rgba(248,81,73,'+(pulseAlpha*0.15)+')');
+      grad.addColorStop(0.35,'rgba(248,81,73,'+(pulseAlpha*0.3)+')');
+      grad.addColorStop(0.7,'rgba(248,81,73,'+(pulseAlpha*0.08)+')');
       grad.addColorStop(1,'rgba(248,81,73,0)');
       ctx.fillStyle=grad;
       ctx.beginPath();
-      ctx.arc(n.x,n.y,pulseR+18,0,Math.PI*2);
+      ctx.arc(n.x,n.y,pulseR+10,0,Math.PI*2);
       ctx.fill();
 
       // 外圈红色脉冲环（较淡）
-      ctx.strokeStyle='rgba(248,81,73,'+(pulseAlpha*0.6)+')';
-      ctx.lineWidth=1.5+pulseAlpha*1.5;
+      ctx.strokeStyle='rgba(248,81,73,'+(pulseAlpha*0.35)+')';
+      ctx.lineWidth=1+pulseAlpha*0.8;
       ctx.beginPath();
-      ctx.arc(n.x,n.y,pulseR+6,0,Math.PI*2);
+      ctx.arc(n.x,n.y,pulseR+3,0,Math.PI*2);
       ctx.stroke();
 
       // 内圈红色脉冲环（较亮）
-      ctx.strokeStyle='rgba(248,81,73,'+pulseAlpha+')';
-      ctx.lineWidth=2+pulseAlpha*2;
+      ctx.strokeStyle='rgba(248,81,73,'+(pulseAlpha*0.6)+')';
+      ctx.lineWidth=1.5+pulseAlpha*1.2;
       ctx.beginPath();
-      ctx.arc(n.x,n.y,pulseR-4,0,Math.PI*2);
+      ctx.arc(n.x,n.y,pulseR-2,0,Math.PI*2);
       ctx.stroke();
-
-      // 堵点图标背景圆
-      ctx.fillStyle='rgba(248,81,73,'+(pulseAlpha*0.8)+')';
-      ctx.beginPath();
-      ctx.arc(n.x,n.y-NH/2-13,9,0,Math.PI*2);
-      ctx.fill();
-      // 堵点图标（感叹号）
-      ctx.fillStyle='rgba(255,255,255,'+pulseAlpha+')';
-      ctx.font='bold 13px sans-serif';
-      ctx.textAlign='center';
-      ctx.textBaseline='middle';
-      ctx.fillText('!',n.x,n.y-NH/2-13);
     }
 
     // 演示模式覆盖层：未点亮的节点变暗
@@ -2027,22 +2440,90 @@ function recalcAll(){
   }
 }
 
-function injectFault(nodeId){
+// ====== 故障类型体系（v1.9.5）======
+var FAULT_TYPES={
+  syntax:{
+    zh:'语法错误：编译失败',en:'Syntax Error: Compile Failed',
+    typeLabel:{zh:'语法错误',en:'SYNTAX'},
+    icon:'🔴',color:'#f85149',
+    impact:{coupling:9,nestingDepth:5,linesOfCode:210,cyclomaticComplexity:11}
+  },
+  runtime:{
+    zh:'运行时异常：空指针引用',en:'Runtime Error: Null Pointer',
+    typeLabel:{zh:'运行时',en:'RUNTIME'},
+    icon:'🟠',color:'#d29922',
+    impact:{coupling:9,nestingDepth:5,linesOfCode:210,cyclomaticComplexity:11}
+  },
+  dependency:{
+    zh:'依赖缺失：找不到模块',en:'Dependency Error: Module Not Found',
+    typeLabel:{zh:'依赖缺失',en:'DEPENDENCY'},
+    icon:'🟣',color:'#bc8cff',
+    impact:{coupling:15,nestingDepth:0,linesOfCode:0,cyclomaticComplexity:0}
+  },
+  config:{
+    zh:'配置错误：端口冲突',en:'Config Error: Port Conflict',
+    typeLabel:{zh:'配置错误',en:'CONFIG'},
+    icon:'⚪',color:'#8b949e',
+    impact:{coupling:9,nestingDepth:5,linesOfCode:210,cyclomaticComplexity:11}
+  },
+  network:{
+    zh:'网络超时：API连接失败',en:'Network Error: API Timeout',
+    typeLabel:{zh:'网络超时',en:'NETWORK'},
+    icon:'⚡',color:'#f0883e',
+    impact:{coupling:9,nestingDepth:5,linesOfCode:210,cyclomaticComplexity:11}
+  },
+  memory:{
+    zh:'内存溢出：堆栈不足',en:'Memory Error: Stack Overflow',
+    typeLabel:{zh:'内存溢出',en:'MEMORY'},
+    icon:'🟡',color:'#d29922',
+    impact:{coupling:9,nestingDepth:5,linesOfCode:250,cyclomaticComplexity:12}
+  }
+};
+
+function injectFault(nodeId,type){
   var task=taskById(nodeId);
   if(!task){console.warn('[Fusang] task not found for '+nodeId); return;}
   var oldStatus=task.status;
   task.status='blocked';
-  task.error={message:{zh:'注入故障：模拟错误',en:'Injected fault: simulated error'},file:task.file||'',line:1,callChain:[]};
+  // 随机选择故障类型（如果未指定）
+  var types=Object.keys(FAULT_TYPES);
+  var faultKey=type||(types[Math.floor(Math.random()*types.length)]);
+  var ft=FAULT_TYPES[faultKey]||FAULT_TYPES.syntax;
+  task.error={
+    message:{zh:ft.zh,en:ft.en},
+    type:faultKey,
+    file:task.file||'src/'+nodeId+'.js',
+    line:Math.floor(Math.random()*50)+1,
+    callChain:[]
+  };
+  // 注入质量数据（影响指标，确保超过 getQualityIssues 阈值以触发4档红色渐变）
+  if(!task.quality) task.quality={coupling:0,nestingDepth:0,linesOfCode:0,cyclomaticComplexity:0,hasCircularDep:false};
+  task.quality.coupling=Math.min(100,task.quality.coupling+ft.impact.coupling);
+  task.quality.nestingDepth=Math.min(20,task.quality.nestingDepth+ft.impact.nestingDepth);
+  task.quality.linesOfCode=Math.max(1,task.quality.linesOfCode+ft.impact.linesOfCode);
+  task.quality.cyclomaticComplexity=Math.min(50,task.quality.cyclomaticComplexity+ft.impact.cyclomaticComplexity);
   sendStatusChange(nodeId, oldStatus, 'blocked');
   recalcAll();
+  console.log('[Fusang] ⚡ 注入故障: '+nodeId+' → '+faultKey+' ('+ft.zh+')');
 }
 
+function injectRandomFault(){
+  var candidates=tasks.filter(function(t){return t.id!=='goal';});
+  var idx=Math.floor(Math.random()*candidates.length);
+  var t=candidates[idx];
+  injectFault(t.id); // 随机类型
+  if(currentMode==='interactive'){
+    document.getElementById('btn-inject').style.display='none';
+  }
+}
+
+// ★ v1.9 修复：恢复 startFixAnimation 函数定义（v1.9 重构时遗漏，11处调用全部失效 → PS4状态机崩溃→演示卡住）
 function startFixAnimation(nodeId,type){
   var task=taskById(nodeId);
   if(task){
     var oldStatus=task.status;
     task.status='fixed';
-    sendStatusChange(nodeId, oldStatus, 'fixed');
+    if(typeof sendStatusChange==='function') sendStatusChange(nodeId,oldStatus,'fixed');
   }
   fixAnimations.push({nodeId:nodeId,startTime:now,phase:'flash',type:type});
 }
@@ -2050,13 +2531,15 @@ function startFixAnimation(nodeId,type){
 function drawFixAnimations(){
   fixAnimations=fixAnimations.filter(function(f){
     var elapsed=now-f.startTime;
-    if(elapsed>2100) return false;
+    // AI修复1.5秒，人工修复3秒
+    var duration=f.type==='manual'?3000:1500;
+    if(elapsed>duration) return false;
     if(f.phase==='flash'&&elapsed>=300){
       f.phase='glow';
       var task=taskById(f.nodeId);
       if(task&&task.status==='fixed'){task.status='done';task.error=null;sendStatusChange(f.nodeId,'fixed','done');if(currentMode!=='real') recalcAll();}
     }
-    if(f.phase==='glow'&&elapsed>=1100){
+    if(f.phase==='glow'&&elapsed>=(f.type==='manual'?1100:700)){
       f.phase='particles';
     }
     return true;
@@ -2065,6 +2548,9 @@ function drawFixAnimations(){
     var elapsed=now-f.startTime;
     var node=nodeById(f.nodeId);
     if(!node) return;
+    var duration=f.type==='manual'?3000:1500;
+    var fixColor=f.type==='manual'?'#f5a623':'#63,185,80'; // 人工=橙色, AI=绿色
+    var fixColorRGB=f.type==='manual'?'245,165,35':'63,185,80';
     if(f.phase==='flash'){
       var ep=1-elapsed/300;
       var grad=ctx.createRadialGradient(node.x,node.y,0,node.x,node.y,40+ep*30);
@@ -2075,18 +2561,21 @@ function drawFixAnimations(){
       ctx.arc(node.x,node.y,40+ep*30,0,Math.PI*2);
       ctx.fill();
     } else if(f.phase==='glow'){
-      var gep=(elapsed-300)/800;
+      var glowDur=f.type==='manual'?800:700;
+      var gep=(elapsed-300)/glowDur;
       var radius=20+gep*80;
       var alpha=1-gep*0.8;
-      ctx.strokeStyle='rgba(63,185,80,'+alpha+')';
+      ctx.strokeStyle='rgba('+fixColorRGB+','+alpha+')';
       ctx.lineWidth=2+gep*3;
       ctx.beginPath();
       ctx.arc(node.x,node.y,radius,0,Math.PI*2);
       ctx.stroke();
     } else if(f.phase==='particles'){
-      var pep=(elapsed-1100)/1000;
+      var partDur=f.type==='manual'?1000:500;
+      var pep=(elapsed-(f.type==='manual'?1100:700))/partDur;
       if(!f.particles) f.particles=[];
-      while(f.particles.length<8){
+      var count=f.type==='manual'?12:8;
+      while(f.particles.length<count){
         f.particles.push({x:node.x+(Math.random()-0.5)*60, y:node.y, vy:-1-Math.random()*2, life:0});
       }
       f.particles.forEach(function(p){
@@ -2094,13 +2583,40 @@ function drawFixAnimations(){
         p.y+=p.vy;
         p.vy*=0.99;
         var pa=Math.max(0,1-p.life/60);
-        ctx.fillStyle='rgba(240,208,96,'+pa+')';
+        ctx.fillStyle='rgba('+fixColorRGB+','+pa+')';
         ctx.beginPath();
         ctx.arc(p.x,p.y,2,0,Math.PI*2);
         ctx.fill();
       });
     }
   });
+}
+
+// 探伤调试面板函数（v1.9.5）
+function probeDebugInject(){
+  var sel=document.getElementById('probe-debug-select');
+  if(!sel||!sel.value){alert(lang==='zh'?'请选择节点':'Select a node');return;}
+  injectFault(sel.value);
+}
+function probeDebugAiFix(){
+  var sel=document.getElementById('probe-debug-select');
+  if(!sel||!sel.value){alert(lang==='zh'?'请选择节点':'Select a node');return;}
+  startFixAnimation(sel.value,'ai');
+}
+function probeDebugManualFix(){
+  var sel=document.getElementById('probe-debug-select');
+  if(!sel||!sel.value){alert(lang==='zh'?'请选择节点':'Select a node');return;}
+  startFixAnimation(sel.value,'manual');
+}
+function probeDebugHighlight(){
+  var sel=document.getElementById('probe-debug-select');
+  if(!sel||!sel.value){alert(lang==='zh'?'请选择节点':'Select a node');return;}
+  selectedNode=sel.value;
+  requestAnimationFrame(draw);
+  console.log('[Fusang Debug] 🔦 高亮节点: '+sel.value);
+}
+function initProbeDebugPanel(){
+  console.log('[Fusang] 🎮 探伤调试面板已初始化');
 }
 
 // ====== 底座 ======
@@ -2529,18 +3045,68 @@ function drawInfoCard(n){
   // 定位：标题+语言按钮正下方左侧，紧凑版
   var cx=12,cy=72,cw=220,maxTextW=cw-24;
 
-  // ★ 先计算最终高度（必须在绘制背景之前）
+  // ★ 用 nextY 串联所有区域Y坐标，根治溢出
+  var nextY=cy+8; // 起始Y：标题
+
+  // 预计算质量数据
   var qScore=getQualityScore(n.id);
   var qIssues=getQualityIssues(n.id);
   var taskQ=taskById(n.id);
   var hasQuality=taskQ&&taskQ.quality;
-  // 质量信息仅在探伤模式下影响高度，避免搭建/接入模式卡片被撑大
   var showQuality=(currentMode==='probe'&&hasQuality);
-  var probeExtra=showQuality?50:0;
-  var multiH=(showQuality&&qIssues.length>1)?(qIssues.length-1)*12:0;
-  var ch=hasError?110:52;
-  if(showQuality) ch+=70+probeExtra+multiH;
 
+  // ====== 第一遍：只算各区域高度，不绘制 ======
+  // 标题区
+  nextY+=14; // 标题12px + 2px间距
+  // 状态区
+  nextY+=16; // 状态11px + 5px间距
+
+  // 错误详情区（hasError时）
+  var errorH=0;
+  if(hasError){
+    errorH+=16; // errMsg行
+    if(liveTask.error.callChain&&liveTask.error.callChain.length>0){
+      errorH+=14; // callChain行
+    }
+    // 操作按钮区（仅演示模式）
+    if(currentMode==='auto'&&!parentReady){
+      errorH+=28; // 按钮22px + 6px间距
+    }
+  }
+  nextY+=errorH;
+
+  // 质量信息区（showQuality时）
+  var qualityH=0;
+  if(showQuality){
+    qualityH+=16; // 质量评分行
+    qualityH+=8;  // 质量条4px + 4px间距
+    var maxShow=Math.min(qIssues.length,3);
+    qualityH+=(maxShow>0?maxShow:1)*20; // 问题列表行（emoji余量）
+    if(qIssues.length>3) qualityH+=20; // "...还有N个"行
+    qualityH+=28; // 详细指标行（两行12px，避免溢出）
+    qualityH+=8;  // 间距
+    qualityH+=1;  // 分隔线
+    qualityH+=20; // 代码位置行
+    qualityH+=20; // 修复建议行
+    qualityH+=32; // 按钮行16px + 16px间距
+  }
+  nextY+=qualityH;
+
+  // 花苞提示
+  if(realStatus==='waiting'&&!hasError){
+    nextY+=16;
+  }
+
+  // 注入故障按钮
+  if(realStatus==='done'&&currentMode==='auto'&&!parentReady){
+    nextY+=30;
+  }
+
+  // 计算卡片高度：从cy到nextY + 底部padding
+  var ch=nextY-cy+60; // 60px底部padding（emoji渲染余量+可视清晰度）
+  if(ch<64) ch=64; // 最小高度保底
+
+  // ====== 绘制背景 ======
   ctx.fillStyle='rgba(22,27,34,0.95)';
   ctx.beginPath();
   ctx.roundRect(cx,cy,cw,ch,10);
@@ -2548,6 +3114,9 @@ function drawInfoCard(n){
   ctx.strokeStyle='#30363d';
   ctx.lineWidth=1;
   ctx.stroke();
+
+  // ====== 第二遍：绘制内容，用 drawY 串联 ======
+  var drawY=cy+8;
 
   // 标题（紧凑）
   ctx.fillStyle='#e6edf3';
@@ -2559,99 +3128,16 @@ function drawInfoCard(n){
     while(ctx.measureText(title+'...').width>maxTextW&&title.length>0) title=title.slice(0,-1);
     title=title+'...';
   }
-  ctx.fillText(title,cx+10,cy+8);
+  ctx.fillText(title,cx+10,drawY);
+  drawY+=14;
 
   // 状态（紧凑）
   ctx.fillStyle=SC[realStatus];
   ctx.font='bold 11px sans-serif';
-  ctx.fillText(i18n[lang].status[realStatus],cx+10,cy+24);
+  ctx.fillText(i18n[lang].status[realStatus],cx+10,drawY);
+  drawY+=16;
 
-  // ====== 代码探伤仪：质量信息 (v1.9) ======
-  // qScore/qIssues/taskQ/hasQuality/probeExtra/multiH 已在函数顶部计算
-  // 仅在探伤模式下显示质量信息，避免搭建/接入模式被污染
-  if(currentMode==='probe'&&hasQuality){
-    // 探伤模式：扩展更详细的报告（高度已在顶部计算）
-    // 质量评分（紧凑）
-    var scoreColor=qScore>=80?'#3fb950':qScore>=60?'#d29922':'#f85149';
-    ctx.fillStyle='#8b949e';ctx.font='9px sans-serif';ctx.textAlign='left';
-    ctx.fillText(lang==='zh'?'🔍 质量:':'🔍 Q:',cx+10,cy+40);
-    ctx.fillStyle=scoreColor;ctx.font='bold 11px sans-serif';
-    ctx.fillText(qScore+'/100',cx+60,cy+40);
-    // 质量条（紧凑）
-    ctx.fillStyle='#21262d';ctx.beginPath();ctx.roundRect(cx+10,cy+50,190,4,2);ctx.fill();
-    ctx.fillStyle=scoreColor;ctx.beginPath();ctx.roundRect(cx+10,cy+50,190*qScore/100,4,2);ctx.fill();
-    // 问题列表（紧凑，支持多问题）
-    var icons={'highCoupling':'🔴','deepNesting':'🟠','circularDep':'🟣','deadCode':'⚪','largeFunc':'🟡','noErrorHandling':'⚡'};
-    var listY=cy+60;
-    var maxShow=Math.min(qIssues.length,3); // 最多显示前3个
-    for(var i=0;i<maxShow;i++){
-      var iss=qIssues[i];
-      ctx.fillStyle=iss.severity==='high'?'#f85149':iss.severity==='medium'?'#d29922':'#8b949e';
-      ctx.font='9px sans-serif';
-      ctx.fillText((icons[iss.type]||'⚠️')+' '+iss.detail,cx+10,listY+i*12);
-    }
-    if(qIssues.length>3){
-      ctx.fillStyle='#8b949e';ctx.font='8px sans-serif';
-      ctx.fillText('...'+ (lang==='zh'?'还有 '+(qIssues.length-3)+' 个':'+'+(qIssues.length-3)+' more'),cx+10,listY+3*12);
-    } else if(qIssues.length===0){
-      ctx.fillStyle='#3fb950';ctx.font='9px sans-serif';
-      ctx.fillText('✅ '+ (lang==='zh'? '未发现问题':'No issues'),cx+10,listY);
-    }
-    // 详细指标（紧凑）
-    var q=taskQ.quality;
-    ctx.fillStyle='#484f58';ctx.font='8px monospace';ctx.textAlign='left';
-    var detailLine=(lang==='zh'?'耦合:':'C:')+q.coupling+'  '
-      +(lang==='zh'?'嵌套:':'N:')+q.nestingDepth+'  '
-      +(lang==='zh'?'行数:':'L:')+q.linesOfCode+'  '
-      +(lang==='zh'?'复杂度:':'CC:')+q.cyclomaticComplexity;
-    ctx.fillText(detailLine,cx+10,cy+72+Math.max(qIssues.length,1)*12);
-      // ★ 探伤模式专用：定位代码行 + 查看报告按钮
-    if(currentMode==='probe'){
-      // 动态计算分隔线 Y（问题列表 + 详细指标之后）
-      var sepY=cy+84+Math.max(qIssues.length,1)*12;
-      // 分隔线
-      ctx.strokeStyle='#30363d';ctx.lineWidth=1;
-      ctx.beginPath();ctx.moveTo(cx+10,sepY);ctx.lineTo(cx+cw-10,sepY);ctx.stroke();
-      // 代码位置
-      var locText=q.file?('📍 '+(q.file+(q.line?(':'+q.line):''))):(lang==='zh'?'📍 src/'+n.id+'.js':'📍 src/'+n.id+'.js');
-      ctx.fillStyle='#58a6ff';ctx.font='8px monospace';
-      ctx.fillText(locText,cx+10,sepY+8);
-      // 修复建议
-      var fixTips={
-        'highCoupling':lang==='zh'?'💡 拆分模块，降低耦合度':'💡 Split modules',
-        'deepNesting':lang==='zh'?'💡 提取函数，扁平化':'💡 Extract functions',
-        'circularDep':lang==='zh'?'💡 引入中间层解耦':'💡 Decouple via layer',
-        'deadCode':lang==='zh'?'💡 删除未引用的代码':'💡 Remove unused code',
-        'largeFunc':lang==='zh'?'💡 拆分为小函数':'💡 Split into small functions',
-        'noErrorHandling':lang==='zh'?'💡 添加 try-catch':'💡 Add try-catch'
-      };
-      var firstIssue=qIssues.length>0?qIssues[0]:null;
-      ctx.fillStyle='#8b949e';ctx.font='8px sans-serif';
-      var fixText=firstIssue?(fixTips[firstIssue.type]||'💡 优化'):'✅ '+ (lang==='zh'?'质量良好':'Good');
-      ctx.fillText(fixText,cx+10,sepY+20);
-      // 「查看报告」按钮（紧凑）
-      var reportBtnW=72,reportBtnH=16,reportBtnY=sepY+30;
-      ctx.fillStyle='#1f6feb';
-      ctx.beginPath();ctx.roundRect(cx+10,reportBtnY,reportBtnW,reportBtnH,3);ctx.fill();
-      ctx.fillStyle='#fff';ctx.font='bold 8px sans-serif';
-      ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillText(lang==='zh'?'📋 报告':'📋 Report',cx+10+reportBtnW/2,reportBtnY+reportBtnH/2);
-      // 记录按钮 hit 区域（供 click 处理使用）
-      probeReportBtn={x:cx+10,y:reportBtnY,w:reportBtnW,h:reportBtnH,taskId:n.id};
-      // 「📍 定位」小按钮（紧凑，紧挨在「查看报告」右边）
-      var locBtnW=58,locBtnX=cx+10+reportBtnW+4;
-      ctx.fillStyle='#238636';
-      ctx.beginPath();ctx.roundRect(locBtnX,reportBtnY,locBtnW,reportBtnH,3);ctx.fill();
-      ctx.fillStyle='#fff';
-      ctx.fillText(lang==='zh'?'📍 定位':'📍 Go',locBtnX+locBtnW/2,reportBtnY+reportBtnH/2);
-      probeLocateBtn={x:locBtnX,y:reportBtnY,w:locBtnW,h:reportBtnH,taskId:n.id};
-    } else {
-      // 非探伤模式下清空按钮 hit 区域
-      probeReportBtn=null;probeLocateBtn=null;
-    }
-  } // end hasQuality
-
-  // 错误详情（有故障时才展示）— Y坐标下移
+  // 错误详情区
   if(hasError){
     ctx.fillStyle='#f85149';
     ctx.font='bold 11px sans-serif';
@@ -2660,7 +3146,17 @@ function drawInfoCard(n){
       while(ctx.measureText(errMsg+'...').width>maxTextW&&errMsg.length>0) errMsg=errMsg.slice(0,-1);
       errMsg=errMsg+'...';
     }
-    ctx.fillText(errMsg,cx+14,cy+54);
+    ctx.fillText(errMsg,cx+14,drawY);
+    drawY+=16;
+
+    // v1.9.5: 故障类型标签
+    if(liveTask.error.type && FAULT_TYPES[liveTask.error.type]){
+      var ft2=FAULT_TYPES[liveTask.error.type];
+      ctx.fillStyle='#8b949e';
+      ctx.font='9px sans-serif';
+      ctx.fillText('['+ft2.icon+' '+ft2.typeLabel[lang]+']',cx+14,drawY);
+      drawY+=14;
+    }
 
     // 调用链
     if(liveTask.error.callChain&&liveTask.error.callChain.length>0){
@@ -2671,28 +3167,132 @@ function drawInfoCard(n){
         while(ctx.measureText(ccStr+'...').width>maxTextW&&ccStr.length>0) ccStr=ccStr.slice(0,-1);
         ccStr=ccStr+'...';
       }
-      ctx.fillText(ccStr,cx+14,cy+72);
+      ctx.fillText(ccStr,cx+14,drawY);
+      drawY+=14;
     }
 
     // 操作按钮（仅演示模式显示；调试/探伤/外接信号模式不显示）
-    if(currentMode==='auto' && !parentReady){
-      var btnW=90,btnH=22,btnY=cy+96;
+    if(currentMode==='auto'&&!parentReady){
+      var btnW=90,btnH=22;
       ctx.fillStyle='#58a6ff';
       ctx.beginPath();
-      ctx.roundRect(cx+14,btnY,btnW,btnH,4);
+      ctx.roundRect(cx+14,drawY,btnW,btnH,4);
       ctx.fill();
       ctx.fillStyle='#fff';
       ctx.font='bold 11px sans-serif';
       ctx.textAlign='center';
       ctx.textBaseline='middle';
-      ctx.fillText(i18n[lang].infoCard.aiFix, cx+14+btnW/2, btnY+btnH/2);
+      ctx.fillText(i18n[lang].infoCard.aiFix, cx+14+btnW/2, drawY+btnH/2);
       ctx.fillStyle='#6e7681';
       ctx.beginPath();
-      ctx.roundRect(cx+14+btnW+6,btnY,btnW,btnH,4);
+      ctx.roundRect(cx+14+btnW+6,drawY,btnW,btnH,4);
       ctx.fill();
       ctx.fillStyle='#e6edf3';
-      ctx.fillText(i18n[lang].infoCard.manualFix, cx+14+btnW+6+btnW/2, btnY+btnH/2);
+      ctx.fillText(i18n[lang].infoCard.manualFix, cx+14+btnW+6+btnW/2, drawY+btnH/2);
+      drawY+=28;
     }
+  }
+
+  // ====== 代码探伤仪：质量信息 (v1.9) ======
+  if(showQuality){
+    // 质量评分
+    var scoreColor=qScore>=80?'#3fb950':qScore>=60?'#d29922':'#f85149';
+    ctx.fillStyle='#8b949e';ctx.font='9px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';
+    ctx.fillText(lang==='zh'?'🔍 质量:':'🔍 Q:',cx+10,drawY);
+    ctx.fillStyle=scoreColor;ctx.font='bold 11px sans-serif';
+    ctx.fillText(qScore+'/100',cx+60,drawY);
+    drawY+=16;
+
+    // 质量条
+    ctx.fillStyle='#21262d';ctx.beginPath();ctx.roundRect(cx+10,drawY,190,4,2);ctx.fill();
+    ctx.fillStyle=scoreColor;ctx.beginPath();ctx.roundRect(cx+10,drawY,190*qScore/100,4,2);ctx.fill();
+    drawY+=8;
+
+    // 问题列表
+    var icons={'highCoupling':'🔴','deepNesting':'🟠','circularDep':'🟣','deadCode':'⚪','largeFunc':'🟡','noErrorHandling':'⚡'};
+    var maxShow=Math.min(qIssues.length,3);
+    for(var i=0;i<maxShow;i++){
+      var iss=qIssues[i];
+      ctx.fillStyle=iss.severity==='high'?'#f85149':iss.severity==='medium'?'#d29922':'#8b949e';
+      ctx.font='10px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';
+      ctx.fillText((icons[iss.type]||'⚠️')+' '+iss.detail,cx+10,drawY);
+      drawY+=20;
+    }
+    if(qIssues.length>3){
+      ctx.fillStyle='#8b949e';ctx.font='11px sans-serif';
+      ctx.fillText('...'+ (lang==='zh'?'还有 '+(qIssues.length-3)+' 个':'+'+(qIssues.length-3)+' more'),cx+10,drawY);
+      drawY+=20;
+    } else if(qIssues.length===0){
+      ctx.fillStyle='#3fb950';ctx.font='11px sans-serif';
+      ctx.fillText('✅ '+ (lang==='zh'? '未发现问题':'No issues'),cx+10,drawY);
+      drawY+=20;
+    }
+
+    // 详细指标（拆两行，每行放两个指标，防止溢出）
+    var q=taskQ.quality;
+    ctx.fillStyle='#8b949e';ctx.font='bold 12px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';
+    // 第一行：耦合度 + 嵌套深度
+    var line1=(lang==='zh'?'耦合:':'C:')+(q.coupling||'N/A')+'    '
+      +(lang==='zh'?'嵌套:':'N:')+(q.nestingDepth||'N/A');
+    ctx.fillText(line1,cx+10,drawY);
+    drawY+=14;
+    // 第二行：行数 + 复杂度
+    var line2=(lang==='zh'?'行数:':'L:')+(q.linesOfCode||'N/A')+'    '
+      +(lang==='zh'?'复杂度:':'CC:')+(q.cyclomaticComplexity||'N/A');
+    ctx.fillText(line2,cx+10,drawY);
+    drawY+=14;
+
+    // 间距
+    drawY+=8;
+
+    // 分隔线
+    ctx.strokeStyle='#30363d';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(cx+10,drawY);ctx.lineTo(cx+cw-10,drawY);ctx.stroke();
+    drawY+=1;
+
+    // 代码位置
+    var locText=q.file?('📍 '+(q.file+(q.line?(':'+q.line):''))):(lang==='zh'?'📍 src/'+n.id+'.js':'📍 src/'+n.id+'.js');
+    ctx.fillStyle='#58a6ff';ctx.font='10px sans-serif';ctx.textBaseline='top';
+    ctx.fillText(locText,cx+10,drawY+4);
+    drawY+=20;
+
+    // 修复建议
+    var fixTips={
+      'highCoupling':lang==='zh'?'💡 拆分模块，降低耦合度':'💡 Split modules',
+      'deepNesting':lang==='zh'?'💡 提取函数，扁平化':'💡 Extract functions',
+      'circularDep':lang==='zh'?'💡 引入中间层解耦':'💡 Decouple via layer',
+      'deadCode':lang==='zh'?'💡 删除未引用的代码':'💡 Remove unused code',
+      'largeFunc':lang==='zh'?'💡 拆分为小函数':'💡 Split into small functions',
+      'noErrorHandling':lang==='zh'?'💡 添加 try-catch':'💡 Add try-catch'
+    };
+    var firstIssue=qIssues.length>0?qIssues[0]:null;
+    ctx.fillStyle='#8b949e';ctx.font='10px sans-serif';
+    var fixText=firstIssue?(fixTips[firstIssue.type]||'💡 优化'):'✅ '+ (lang==='zh'?'质量良好':'Good');
+    ctx.fillText(fixText,cx+10,drawY+2);
+    drawY+=20;
+
+    // 「查看报告」按钮 + 「定位」按钮
+    if(currentMode==='probe'){
+      var reportBtnW=72,reportBtnH=16;
+      ctx.fillStyle='#1f6feb';
+      ctx.beginPath();ctx.roundRect(cx+10,drawY,reportBtnW,reportBtnH,3);ctx.fill();
+      ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(lang==='zh'?'📋 报告':'📋 Report',cx+10+reportBtnW/2,drawY+reportBtnH/2);
+      probeReportBtn={x:cx+10,y:drawY,w:reportBtnW,h:reportBtnH,taskId:n.id};
+      var locBtnW=58,locBtnX=cx+10+reportBtnW+4;
+      ctx.fillStyle='#238636';
+      ctx.beginPath();ctx.roundRect(locBtnX,drawY,locBtnW,reportBtnH,3);ctx.fill();
+      ctx.fillStyle='#fff';
+      ctx.fillText(lang==='zh'?'📍 定位':'📍 Go',locBtnX+locBtnW/2,drawY+reportBtnH/2);
+      probeLocateBtn={x:locBtnX,y:drawY,w:locBtnW,h:reportBtnH,taskId:n.id};
+    } else {
+      probeReportBtn=null;probeLocateBtn=null;
+    }
+    drawY+=32;
+  } else {
+    // 非探伤/无质量数据时清空按钮 hit 区域
+    probeReportBtn=null;probeLocateBtn=null;
   }
 
   // 花苞节点提示
@@ -2701,21 +3301,23 @@ function drawInfoCard(n){
     ctx.font='10px sans-serif';
     ctx.textAlign='left';
     ctx.textBaseline='top';
-    ctx.fillText(i18n[lang].infoCard.budHint, cx+14, cy+120);
+    ctx.fillText(i18n[lang].infoCard.budHint, cx+14, drawY);
+    drawY+=16;
   }
 
   // 注入故障按钮（仅演示模式显示；调试/探伤/外接信号模式不显示）
   if(realStatus==='done'&&currentMode==='auto'&&!parentReady){
-    var btnW=90,btnH=22,btnY=cy+158;
+    var btnW=90,btnH=22;
     ctx.fillStyle='#f85149';
     ctx.beginPath();
-    ctx.roundRect(cx+14,btnY,btnW,btnH,4);
+    ctx.roundRect(cx+14,drawY,btnW,btnH,4);
     ctx.fill();
     ctx.fillStyle='#fff';
     ctx.font='bold 11px sans-serif';
     ctx.textAlign='center';
     ctx.textBaseline='middle';
-    ctx.fillText(i18n[lang].infoCard.injectFault, cx+14+btnW/2, btnY+btnH/2);
+    ctx.fillText(i18n[lang].infoCard.injectFault, cx+14+btnW/2, drawY+btnH/2);
+    drawY+=30;
   }
 }
 
@@ -2749,6 +3351,195 @@ function locateCode(taskId){
   }catch(err){/* ignore */}
   // 显示成功提示
   showProbeToast(lang==='zh'?'已复制 '+locStr:'Copied '+locStr);
+}
+
+// ====== v1.9.6 探伤模式：多问题中央详情弹窗（画布外HTML） ======
+function openProbeDetail(nodeId, clickX, clickY){
+  var task=taskById(nodeId);
+  if(!task){return;}
+  var issues=getQualityIssues(nodeId);
+  var score=getQualityScore(nodeId);
+  var overlay=document.getElementById('probe-detail-overlay');
+  var body=document.getElementById('probe-detail-body');
+  var card=document.getElementById('probe-detail-card');
+  if(!overlay||!body||!card){return;}
+
+  // 头部：节点名 + 问题数 + 关闭
+  var sevColor=score>=80?'#3fb950':score>=60?'#d29922':'#f85149';
+  var hdr='<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #30363d;">'
+    +'<div style="display:flex;align-items:center;gap:10px;">'
+    +'<span style="font-size:15px;font-weight:600;color:#e6edf3;">'+task.label[lang]+'</span>'
+    +'<span style="background:'+sevColor+'22;color:'+sevColor+';border:1px solid '+sevColor+'55;border-radius:10px;padding:1px 8px;font-size:11px;">'+issues.length+' '+(lang==='zh'?'个问题':'issues')+'</span>'
+    +'</div>'
+    +'<span onclick="closeProbeDetail()" style="color:#8b949e;cursor:pointer;font-size:18px;line-height:1;padding:4px;">×</span>'
+    +'</div>';
+
+  // 评分行
+  var scoreRow='<div style="display:flex;align-items:center;gap:8px;padding:10px 16px;">'
+    +'<span style="color:#8b949e;font-size:11px;letter-spacing:1px;">'+(lang==='zh'?'质量评分':'SCORE')+'</span>'
+    +'<span style="color:'+sevColor+';font-weight:700;font-family:JetBrains Mono,monospace;font-size:13px;">'+score+'/100</span>'
+    +'<div style="flex:1;height:4px;background:#21262d;border-radius:2px;overflow:hidden;margin-left:8px;">'
+    +'<div style="width:'+score+'%;height:100%;background:'+sevColor+';"></div></div>'
+    +'</div>';
+
+  // 问题列表
+  var listHtml='';
+  issues.forEach(function(iss){
+    var info=QC[iss.type]||{icon:'⚠️'};
+    var sevC=iss.severity==='high'?'#f85149':iss.severity==='medium'?'#d29922':'#6e7681';
+    var sevT=iss.severity==='high'?(lang==='zh'?'高危':'HIGH'):(iss.severity==='medium'?(lang==='zh'?'中':'MED'):(lang==='zh'?'低':'LOW'));
+    var labelStr=info.label?(info.label[lang]||info.label.zh||iss.type):iss.type;
+    listHtml+='<div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-top:1px solid #21262d;">'
+      +'<span style="font-size:14px;width:20px;text-align:center;">'+(info.icon||'⚠️')+'</span>'
+      +'<div style="flex:1;min-width:0;">'
+      +'<div style="color:#e6edf3;font-size:12px;">'+labelStr+'</div>'
+      +'<div style="color:#8b949e;font-size:10px;font-family:JetBrains Mono,monospace;">'+iss.detail+'</div>'
+      +'</div>'
+      +'<span style="color:'+sevC+';font-size:9px;font-weight:600;border:1px solid '+sevC+'44;border-radius:8px;padding:1px 6px;">'+sevT+'</span>'
+      +'</div>';
+    // 修复建议
+    if(info.tip){
+      var tipStr=info.tip[lang]||info.tip.zh||'';
+      listHtml+='<div style="padding:2px 16px 8px 46px;color:#58a6ff;font-size:10px;">💡 '+tipStr+'</div>';
+    }
+  });
+  if(issues.length===0){
+    listHtml='<div style="padding:20px;text-align:center;color:#3fb950;font-size:12px;">✅ '+(lang==='zh'?'未发现问题':'No issues')+'</div>';
+  }
+
+  // 底部：代码位置 + 按钮
+  var q=task.quality||{};
+  var locFile=q.file||(task.codeLocation&&task.codeLocation.file)||('src/'+nodeId+'.js');
+  var locLine=q.line||(task.codeLocation&&task.codeLocation.line)||'';
+  var locStr='📍 '+locFile+(locLine?(':'+locLine):'');
+  var ftr='<div style="padding:10px 16px;border-top:1px solid #30363d;">'
+    +'<div style="color:#58a6ff;font-size:11px;font-family:JetBrains Mono,monospace;margin-bottom:10px;word-break:break-all;">'+locStr+'</div>'
+    +'<div style="display:flex;gap:8px;">'
+    +'<button onclick="locateCode(\''+nodeId+'\')" style="flex:1;background:#238636;color:#fff;border:none;border-radius:5px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">📍 '+(lang==='zh'?'定位':'Locate')+'</button>'
+    +'<button onclick="exportProbeReport()" style="flex:1;background:#1f6feb;color:#fff;border:none;border-radius:5px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">📋 '+(lang==='zh'?'报告':'Report')+'</button>'
+    +'</div></div>';
+
+  body.innerHTML=hdr+scoreRow+'<div style="max-height:40vh;overflow-y:auto;">'+listHtml+'</div>'+ftr;
+
+  // ★ 智能定位：默认在点击位置右侧 80px，垂直居中；边界超出则反向
+  var screenX, screenY;
+  if(clickX!==undefined && clickY!==undefined){
+    screenX=clickX; screenY=clickY;
+  } else {
+    // 从 layoutNodes 找节点中心（fallback）
+    var nd=null;
+    for(var i=0;i<layoutNodes.length;i++){if(layoutNodes[i].id===nodeId){nd=layoutNodes[i];break;}}
+    if(nd){
+      var cr=cv.getBoundingClientRect();
+      screenX=cr.left + nd.x*treeScale + treeOffsetX;
+      screenY=cr.top + nd.y*treeScale + treeOffsetY;
+    } else {
+      screenX=window.innerWidth/2; screenY=window.innerHeight/2;
+    }
+  }
+  var cardW=320, gap=80;
+  var left=screenX+gap, top=screenY-card.offsetHeight/2;
+  // 边界检测：右边超出 → 放左侧
+  if(left+cardW > window.innerWidth-12){left=screenX-cardW-gap;}
+  if(left<12){left=12;}
+  if(top<12){top=12;}
+  if(top+card.offsetHeight > window.innerHeight-12){top=window.innerHeight-card.offsetHeight-12;}
+  card.style.left=left+'px';
+  card.style.top=top+'px';
+  overlay.style.display='block';
+  console.log('[Fusang Probe] 打开详情弹窗: '+nodeId+' ('+issues.length+' 个问题)');
+}
+
+function closeProbeDetail(){
+  var overlay=document.getElementById('probe-detail-overlay');
+  if(overlay){overlay.style.display='none';}
+}
+
+// ====== v1.9.6 探伤模式：全局体检总览面板（画布外HTML） ======
+var probeOverviewCollapsed=false;
+function toggleProbeOverview(){
+  probeOverviewCollapsed=!probeOverviewCollapsed;
+  var body=document.getElementById('probe-ov-body');
+  var arrow=document.getElementById('probe-ov-arrow');
+  if(body) body.style.display=probeOverviewCollapsed?'none':'block';
+  if(arrow) arrow.textContent=probeOverviewCollapsed?'▶':'▼';
+}
+// 切换面板显隐（探伤模式显示，其他模式隐藏）— 由 setScene/setMode 调用
+function showProbeOverview(show){
+  var el=document.getElementById('probe-overview');
+  if(el) el.style.display=show?'block':'none';
+  if(show) updateProbeOverview();
+}
+// 刷新面板内容（数据驱动，每帧或状态变化时调用）
+function updateProbeOverview(){
+  if(currentMode!=='probe') return;
+  var body=document.getElementById('probe-ov-body');
+  if(!body) return;
+  // 统计
+  var totalNodes=0, problemNodes=0, totalIssues=0;
+  var sevCount={high:0,medium:0,low:0};
+  var scoreSum=0, scoreCount=0;
+  var ranking=[]; // [{id,label,n,score}]
+  tasks.forEach(function(t){
+    if(t.isGoal) return;
+    totalNodes++;
+    var issues=getQualityIssues(t.id);
+    var hasQ=t.quality?true:false;
+    if(hasQ){ scoreSum+=getQualityScore(t.id); scoreCount++; }
+    if(issues.length>0){
+      problemNodes++;
+      totalIssues+=issues.length;
+      issues.forEach(function(iss){ sevCount[iss.severity]=(sevCount[iss.severity]||0)+1; });
+      ranking.push({id:t.id,label:t.label[lang]||t.id,n:issues.length,score:getQualityScore(t.id)});
+    }
+  });
+  ranking.sort(function(a,b){ return b.n-a.n; });
+  var avgScore=scoreCount>0?Math.round(scoreSum/scoreCount):100;
+  var sevColor=avgScore>=80?'#3fb950':avgScore>=60?'#d29922':'#f85149';
+
+  var L=i18n[lang]||{};
+  var isZh=lang==='zh';
+  var html='';
+  // 评分行
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;">'
+    +'<span style="color:#8b949e;font-size:10px;letter-spacing:1px;">'+(isZh?'总评分':'SCORE')+'</span>'
+    +'<span style="color:'+sevColor+';font-weight:700;font-family:JetBrains Mono,monospace;font-size:12px;">'+avgScore+'/100</span>'
+    +'</div>';
+  // 节点/问题数
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-top:1px solid #21262d;">'
+    +'<span style="color:#8b949e;font-size:10px;">'+(isZh?'问题节点':'ISSUES NODE')+'</span>'
+    +'<span style="color:'+(problemNodes>0?'#f85149':'#3fb950')+';font-family:JetBrains Mono,monospace;font-size:11px;">'+problemNodes+'/'+totalNodes+'</span>'
+    +'</div>';
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-top:1px solid #21262d;">'
+    +'<span style="color:#8b949e;font-size:10px;">'+(isZh?'总问题数':'TOTAL')+'</span>'
+    +'<span style="color:'+(totalIssues>0?'#f85149':'#3fb950')+';font-family:JetBrains Mono,monospace;font-size:11px;">'+totalIssues+'</span>'
+    +'</div>';
+  // 严重度分布
+  html+='<div style="padding:6px 0 4px;border-top:1px solid #21262d;">'
+    +'<div style="color:#8b949e;font-size:10px;margin-bottom:4px;">'+(isZh?'严重度分布':'SEVERITY')+'</div>'
+    +'<div style="display:flex;gap:6px;font-size:10px;">'
+    +'<span style="color:#f85149;">🔴 '+(isZh?'高危':'HIGH')+' '+sevCount.high+'</span>'
+    +'<span style="color:#d29922;">🟠 '+(isZh?'中':'MED')+' '+sevCount.medium+'</span>'
+    +'<span style="color:#6e7681;">⚪ '+(isZh?'低':'LOW')+' '+sevCount.low+'</span>'
+    +'</div></div>';
+  // 最脏Top3（可点击跳详情）
+  if(ranking.length>0){
+    html+='<div style="padding:6px 0 4px;border-top:1px solid #21262d;">'
+      +'<div style="color:#8b949e;font-size:10px;margin-bottom:4px;">'+(isZh?'最脏 Top3':'WORST TOP3')+'</div>';
+    ranking.slice(0,3).forEach(function(r,idx){
+      var rc=r.score>=60?'#d29922':'#f85149';
+      html+='<div onclick="openProbeDetail(\''+r.id+'\')" style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;cursor:pointer;" onmouseover="this.style.background=\'#21262d\'" onmouseout="this.style.background=\'transparent\'">'
+        +'<span style="color:#c9d1d9;font-size:10px;">'+(idx+1)+'. '+r.label+'</span>'
+        +'<span style="color:'+rc+';font-family:JetBrains Mono,monospace;font-size:10px;">'+r.n+(isZh?'个':'')+'</span>'
+        +'</div>';
+    });
+    html+='</div>';
+  }
+  // 导出按钮
+  html+='<div style="padding:6px 0 2px;border-top:1px solid #21262d;">'
+    +'<button onclick="exportProbeReport()" style="width:100%;background:#1f6feb;color:#fff;border:none;border-radius:4px;padding:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">📋 '+(isZh?'导出报告':'Export Report')+'</button>'
+    +'</div>';
+  body.innerHTML=html;
 }
 
 // 探伤模式：Toast 提示
@@ -2805,7 +3596,9 @@ function generateProbeReport(){
       lines.push('');
       lines.push('- **位置**：`'+ (q.file||('src/'+nid+'.js'))+(q.line?(':'+q.line):'') +'`');
       if(issue){
-        lines.push('- **问题类型**：'+issue.label);
+        var qInfo=QC[issue.type]||{};
+        var qLabel=qInfo.label?(qInfo.label[lang]||qInfo.label.zh||issue.type):issue.type;
+        lines.push('- **问题类型**：'+qLabel);
         lines.push('- **详情**：'+issue.detail);
       }
       lines.push('- **耦合度**：'+q.coupling+' | **嵌套深度**：'+q.nestingDepth+' | **代码行数**：'+q.linesOfCode);
@@ -2960,6 +3753,8 @@ function hitBud(mx,my){
 }
 
 cv.addEventListener('mousemove',function(e){
+  // ★ 拖动中：cursor 锁定为 grabbing，不改写（防闪烁）
+  if(isPanning) return;
   // 接入模式：不响应hover效果（树为纯观察器）
   if(currentMode==='real'){cv.style.cursor='default';return;}
   var r=cv.getBoundingClientRect();
@@ -2969,6 +3764,18 @@ cv.addEventListener('mousemove',function(e){
   hoveredNode=hitTest(lx,ly);
   var bud=hitBud(lx,ly);
   cv.style.cursor=hoveredNode||hitPedestal(mx,my)||hitLegendToggle(mx,my)||bud?'pointer':'default';
+});
+
+// ====== 双击重置视图（v1.9.3 补漏）======
+// 空白处（非节点）双击 → 恢复默认缩放/位置
+function resetTreeView(){ treeScale=0.95; treeOffsetX=0; treeOffsetY=0; userZoomed=false; }
+cv.addEventListener('dblclick', function(e){
+  if(currentMode==='real') return;
+  var rect=cv.getBoundingClientRect();
+  var mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  // 反推为逻辑坐标（hitTest 接受逻辑坐标）
+  var lx=(mx-treeOffsetX)/treeScale, ly=(my-treeOffsetY)/treeScale;
+  if(!hitTest(lx,ly)) resetTreeView();
 });
 
 cv.addEventListener('click',function(e){
@@ -3054,6 +3861,16 @@ cv.addEventListener('click',function(e){
     if(currentMode==='real'){return;}
     // 接入模式（外部信号已接入）：只发代码位置通知，不显示InfoCard
     if(parentReady){return;}
+    // 探伤模式：有质量问题的节点 → 弹详情窗；无问题 → 选中显示InfoCard
+    if(currentMode==='probe'){
+      // v1.9.6: 4档红色渐变体系下，有问题(L1+)的节点点击弹详情
+      if(getIssueLevel(hit.id)>0){
+        openProbeDetail(hit.id, e.clientX, e.clientY);
+      }else{
+        selectedNode=hit;
+      }
+      return;
+    }
     currentMode=null; selectedNode=hit; return;
   }
 
@@ -3089,6 +3906,8 @@ cv.addEventListener('click',function(e){
   // 点击空白区域
   if(currentMode==='auto'){setMode('interactive');lastClickTime=now;return;}
   if(currentMode==='interactive'){lastClickTime=now;hideNodeMenu();return;}
+  // 探伤模式下只取消选中，不改currentMode
+  if(currentMode==='probe'){selectedNode=null;return;}
   if(!parentReady) currentMode=null; selectedNode=null;
 });
 
@@ -3380,10 +4199,10 @@ function setMode(mode){
   if(mode==='auto') demoState=0;
   selectedNode=null;
   rootsExpanded=false;
-  // 模式按钮高亮
-  var modeToBtnId={'auto':'btn-build-auto','interactive':'btn-build-interactive','real':'btn-build-real','probe':'btn-probe'};
+  // 模式按钮高亮（探伤模式由setProbeMode处理，不在此处）
+  var modeToBtnId={'auto':'btn-build-auto','interactive':'btn-build-interactive','real':'btn-build-real'};
   var activeBtnId=modeToBtnId[mode];
-  ['btn-build-auto','btn-build-interactive','btn-build-real','btn-probe'].forEach(function(id){
+  ['btn-build-auto','btn-build-interactive','btn-build-real'].forEach(function(id){
     var b=document.getElementById(id);
     if(b) {
       if(id===activeBtnId){
@@ -3408,6 +4227,8 @@ function setMode(mode){
     resetToAllGreen();
     hideNodeMenu();
     cv.style.border='none';
+    // ★ v1.9.3 补漏：auto 切回时重置 zoom/pan（避免状态污染）
+    if(typeof resetTreeView==='function') resetTreeView();
   } else if(mode==='interactive'){
     // 调试优先：暂停演示状态机，全绿展示
     demoDimOverlay=false;demoLitSet={};demoState=-1;
@@ -3457,6 +4278,15 @@ function setMode(mode){
     console.log('[Fusang] 🔌 手动进入接入模式 → 所有节点未开启，等待外部信号');
     // 初始化空闲检测计时器
     accessModeLastActive=performance.now();
+  } else if(mode==='probe'){
+    // ===== 探伤模式：暂停搭建演示，重置探伤状态 =====
+    demoDimOverlay=false;demoLitSet={};demoState=-1;
+    hideNodeMenu();
+    cv.style.border='none';
+    // 节点全部恢复为 waiting（灰色，等待探伤扫描）
+    tasks.forEach(function(t){t.status='waiting';t.error=null;});
+    recalcAll();
+    console.log('[Fusang] 🔬 进入探伤模式');
   } else {
     cv.style.border='none';
   }
@@ -3565,17 +4395,6 @@ document.addEventListener('click',function(e){
 function resetToAllGreen(){
   tasks.forEach(function(t){t.status='done';t.error=null;});
   recalcAll();
-}
-
-function injectRandomFault(){
-  var candidates=tasks.filter(function(t){return t.id!=='goal';});
-  var idx=Math.floor(Math.random()*candidates.length);
-  var t=candidates[idx];
-  t.status='blocked';
-  t.error={message:{zh:'随机注入故障',en:'Random fault injected'},file:t.file||'',line:1,callChain:[]};
-  if(currentMode==='interactive'){
-    document.getElementById('btn-inject').style.display='none';
-  }
 }
 
 // ====== 接入模式控制面板 ======
@@ -3799,9 +4618,11 @@ function initLiveDragHandle(){
 
 resize();
 fetchTasks();
+// ★ v1.9 探伤图例（占位 · 阶段 5 替换为完整实现）
+function toggleProbeLegend(){var el=document.getElementById("probe-legend");if(!el) return;el.style.display=el.style.display==="flex"?"none":"flex";} document.addEventListener("keydown",function(e){if(isPanning && e.key==='Escape'){isPanning=false; cv.style.cursor='default'; return;} if(e.key==="Escape"){var lg=document.getElementById("probe-legend");if(lg && lg.style.display==="flex"){lg.style.display="none";} var dv=document.getElementById("probe-detail-overlay");if(dv && dv.style.display!=="none" && typeof closeProbeDetail==="function"){closeProbeDetail();}}});
 </script>
 
-<script src="scene-switch.js"></script>
+<script src="scene-switch.js?v=1.9.2"></script>
 
 </body>
 </html>
